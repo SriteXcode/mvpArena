@@ -193,20 +193,20 @@ export default function SquadRostersPage() {
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-10 space-y-6">
       {/* Title */}
       <div className="text-center max-w-2xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-sky-200 bg-sky-50 text-xs font-mono text-sky-800 mb-3 shadow-xs">
-          <Users className="h-3.5 w-3.5 text-sky-600" />
-          <span>INSTITUTIONAL ESPORTS ROSTER HUB</span>
+        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-mono text-emerald-800 mb-3 shadow-xs">
+          <Users className="h-3.5 w-3.5 text-emerald-600" />
+          <span>MY SQUAD &amp; TACTICAL LINEUP</span>
         </div>
         <h1 className="text-xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-          Squad Management &amp; Tactical Lineups
+          My Squad Management
         </h1>
         <p className="mt-1 text-xs text-slate-600">
-          Form permanent esports rosters, assign tactical roles (IGL, Assaulter, Sniper), and unlock 1-click tournament squad autofill.
+          Form permanent esports squads, assign tactical roles (IGL, Assaulter, Sniper), and unlock 1-click tournament squad autofill.
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2 text-xs">
+      {/* Symmetrical Tabs */}
+      <div className="flex flex-wrap items-center justify-center gap-2 border-b border-slate-200 pb-3 text-xs">
         <button
           onClick={() => setActiveTab("squad")}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
@@ -304,7 +304,7 @@ export default function SquadRostersPage() {
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {myTeam.members?.map((m: any, idx: number) => (
+                  {myTeam.members?.map((m: { gameId: string; inGameName: string; role: string }, idx: number) => (
                     <div
                       key={m.gameId || idx}
                       className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-slate-50 transition-colors"
