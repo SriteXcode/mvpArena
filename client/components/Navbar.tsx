@@ -24,7 +24,7 @@ import { useAuth } from "@/lib/context/AuthContext";
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { user, logout, openAuthModal } = useAuth();
+  const { user, logout, openAuthModal, completionStats, openCompletionModal } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -260,6 +260,40 @@ export default function Navbar() {
                         </span>
                       </div>
                     </div>
+
+                    {/* Profile Readiness & Completion Progress */}
+                    {completionStats.percent < 100 ? (
+                      <div className="mb-2 p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-1.5">
+                        <div className="flex items-center justify-between text-[10px] font-mono">
+                          <span className="font-bold text-amber-900">Profile Setup</span>
+                          <span className="font-extrabold text-amber-700">{completionStats.percent}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-amber-200/60 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-amber-600 rounded-full transition-all duration-300"
+                            style={{ width: `${completionStats.percent}%` }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            openCompletionModal();
+                          }}
+                          className="w-full text-center py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-bold transition-all shadow-2xs cursor-pointer"
+                        >
+                          Complete Profile (+{100 - completionStats.percent}%)
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mb-2 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                        <span className="text-[10px] font-mono text-emerald-800 font-bold flex items-center gap-1">
+                          <ShieldCheck className="h-3 w-3 text-emerald-600" />
+                          Profile 100% Complete
+                        </span>
+                        <span className="text-[9px] font-mono text-emerald-600 font-semibold">Verified</span>
+                      </div>
+                    )}
 
                     {/* Links */}
                     <div className="space-y-1">

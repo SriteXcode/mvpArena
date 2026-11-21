@@ -76,6 +76,7 @@ const UserSchema = new Schema<IUser>(
     referralCode: { type: String, unique: true, sparse: true, index: true },
     referredBy: { type: Schema.Types.ObjectId, ref: "User" },
     walletBalance: { type: Number, default: 0 },
+    upiId: { type: String, default: "" },
   },
   { timestamps: true }
 );

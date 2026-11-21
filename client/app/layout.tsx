@@ -4,6 +4,8 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import AuthModal from "@/components/AuthModal";
+import ProfileProgressBanner from "@/components/ProfileProgressBanner";
+import ProfileCompletionModal from "@/components/ProfileCompletionModal";
 import { AuthProvider } from "@/lib/context/AuthContext";
 import { ToastProvider } from "@/lib/context/ToastContext";
 
@@ -34,6 +36,7 @@ export default function RootLayout({
             <Suspense fallback={<div className="h-16 w-full border-b border-(--border-subtle) bg-(--bg-primary)"></div>}>
               <Navbar />
             </Suspense>
+            <ProfileProgressBanner />
             <main className="flex-1">
               <Suspense fallback={<div className="p-12 text-center text-xs text-zinc-500 font-mono">Loading Arena...</div>}>
                 {children}
@@ -41,6 +44,7 @@ export default function RootLayout({
             </main>
             <Footer />
             <AuthModal />
+            <ProfileCompletionModal />
           </ToastProvider>
         </AuthProvider>
 

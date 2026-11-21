@@ -10,6 +10,35 @@ export interface AuthUser {
   name: string;
   role: "player" | "organizer" | "super_admin";
   avatarUrl?: string;
+  whatsappNumber?: string;
+  upiId?: string;
+  gameProfiles?: Array<{ game: string; gameId: string; inGameName: string; verified?: boolean }>;
+  hasGameId?: boolean;
+}
+
+export interface ProfileCompletionStats {
+  percent: number;
+  hasBasic: boolean;
+  hasGameId: boolean;
+  hasUpiId: boolean;
+}
+
+export function computeProfileCompletion(user: AuthUser | null): ProfileCompletionStats {
+  if (!user) {
+    return { percent: 0, hasBasic: false, hasGameId: false, hasUpiId: false };
+  }
+  const hasBasic = Boolean(user.name && user.username && user.email);
+  const hasGameId = Boolean(
+    user.hasGameId || (user.gameProfiles && user.gameProfiles.length > 0)
+  );
+  const hasUpiId = Boolean(user.upiId && user.upiId.trim().length > 0);
+
+  let percent = 0;
+  if (hasBasic) percent += 40;
+  if (hasGameId) percent += 30;
+  if (hasUpiId) percent += 30;
+
+  return { percent, hasBasic, hasGameId, hasUpiId };
 }
 
 interface AuthContextType {
@@ -23,13 +52,18 @@ interface AuthContextType {
     password: string;
     whatsappNumber?: string;
     role?: "player" | "organizer";
-  }) => Promise<{ success: boolean; error?: string }>;
+  }) => Promise<{ success: boolean; error?: string; user?: AuthUser }>;
   logout: () => Promise<void>;
   setUser: React.Dispatch<React.SetStateAction<AuthUser | null>>;
+  refreshUser: () => Promise<void>;
   authModalOpen: boolean;
   authModalMode: "login" | "register";
   openAuthModal: (mode?: "login" | "register") => void;
   closeAuthModal: () => void;
+  completionModalOpen: boolean;
+  openCompletionModal: () => void;
+  closeCompletionModal: () => void;
+  completionStats: ProfileCompletionStats;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -39,10 +73,15 @@ const AuthContext = createContext<AuthContextType>({
   register: async () => ({ success: false }),
   logout: async () => {},
   setUser: () => {},
+  refreshUser: async () => {},
   authModalOpen: false,
   authModalMode: "login",
   openAuthModal: () => {},
   closeAuthModal: () => {},
+  completionModalOpen: false,
+  openCompletionModal: () => {},
+  closeCompletionModal: () => {},
+  completionStats: { percent: 0, hasBasic: false, hasGameId: false, hasUpiId: false },
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -50,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<"login" | "register">("login");
+  const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const router = useRouter();
 
   const openAuthModal = (mode: "login" | "register" = "login") => {
@@ -64,6 +104,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const url = new URL(window.location.href);
       url.searchParams.delete("auth");
       window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+    }
+  };
+
+  const openCompletionModal = () => {
+    setCompletionModalOpen(true);
+  };
+
+  const closeCompletionModal = () => {
+    setCompletionModalOpen(false);
+  };
+
+  const refreshUser = async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.user) {
+          setUser(data.user);
+        }
+      }
+    } catch {
+      // Ignore
     }
   };
 
@@ -164,6 +226,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     openAuthModal("login");
   };
 
+  const completionStats = computeProfileCompletion(user);
+
   return (
     <AuthContext.Provider
       value={{
@@ -173,10 +237,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         register,
         logout,
         setUser,
+        refreshUser,
         authModalOpen,
         authModalMode,
         openAuthModal,
         closeAuthModal,
+        completionModalOpen,
+        openCompletionModal,
+        closeCompletionModal,
+        completionStats,
       }}
     >
       {children}

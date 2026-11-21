@@ -17,7 +17,7 @@ import {
 import { useAuth } from "@/lib/context/AuthContext";
 
 export default function AuthModal() {
-  const { authModalOpen, authModalMode, openAuthModal, closeAuthModal, login, register } = useAuth();
+  const { authModalOpen, authModalMode, openAuthModal, closeAuthModal, login, register, openCompletionModal } = useAuth();
   
   // View mode can be login, register, or forgot_password
   const [viewMode, setViewMode] = useState<"login" | "register" | "forgot_password">("login");
@@ -115,12 +115,19 @@ export default function AuthModal() {
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const cleanUsername = regUsername.toLowerCase().trim().replace(/[^a-z0-9_]/g, "");
+    if (!/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
+      setError("Username must be 3 to 20 characters and contain only lowercase letters, numbers, and underscores (e.g. viper_god).");
+      return;
+    }
+
     setLoading(true);
 
     const res = await register({
-      name: regName,
-      username: regUsername,
-      email: regEmail,
+      name: regName.trim(),
+      username: cleanUsername,
+      email: regEmail.trim(),
       password: regPassword,
       whatsappNumber: regWhatsapp,
       role: "player",
@@ -131,6 +138,7 @@ export default function AuthModal() {
       setSuccessMsg("Account registration confirmed. Welcome to MVP Arena!");
       setTimeout(() => {
         closeAuthModal();
+        openCompletionModal();
       }, 700);
     } else {
       setError(res.error || "Registration failed. Please check the entered data.");
@@ -739,16 +747,20 @@ export default function AuthModal() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Gamer Tag / Username
+                    Unique Username (User ID)
                   </label>
                   <input
                     type="text"
                     required
                     value={regUsername}
-                    onChange={(e) => setRegUsername(e.target.value)}
+                    onChange={(e) => setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
                     placeholder="e.g. viper_god"
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 shadow-xs font-normal"
+                    maxLength={20}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 shadow-xs font-normal"
                   />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">
+                    Unique platform handle (not your game numeric UID).
+                  </span>
                 </div>
               </div>
 

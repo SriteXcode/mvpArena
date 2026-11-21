@@ -15,7 +15,19 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const normalizedUsername = username.toLowerCase().trim();
+    const normalizedUsername = username.toLowerCase().trim().replace(/[^a-z0-9_]/g, "");
+
+    // Validate username rules (unique athlete handle, NOT game character UID)
+    if (!/^[a-z0-9_]{3,20}$/.test(normalizedUsername)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Username must be 3 to 20 characters and contain only lowercase letters, numbers, and underscores.",
+        },
+        { status: 400 }
+      );
+    }
+
     // Strict Role Enforcement: All public registrations are assigned 'player' by default
     const assignedRole: "player" = "player";
     const refCode = `${normalizedUsername.slice(0, 4).toUpperCase()}${Math.floor(1000 + Math.random() * 9000)}`;
@@ -30,8 +42,14 @@ export async function POST(req: NextRequest) {
       });
 
       if (existingUser) {
+        if (existingUser.username === normalizedUsername) {
+          return NextResponse.json(
+            { success: false, error: "This username is already taken. Please choose a different handle." },
+            { status: 409 }
+          );
+        }
         return NextResponse.json(
-          { success: false, error: "An account with that email or username already exists" },
+          { success: false, error: "An account with that email already exists" },
           { status: 409 }
         );
       }
@@ -46,14 +64,8 @@ export async function POST(req: NextRequest) {
         whatsappNumber: whatsappNumber || "",
         avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${normalizedUsername}`,
         referralCode: refCode,
-        gameProfiles: [
-          {
-            game: "bgmi",
-            gameId: "512984" + Math.floor(1000 + Math.random() * 9000),
-            inGameName: normalizedUsername,
-            verified: true,
-          },
-        ],
+        gameProfiles: [],
+        upiId: "",
       });
 
       userPayload = {
