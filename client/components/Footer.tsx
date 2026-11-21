@@ -67,7 +67,7 @@ export default function Footer() {
             <ul className="space-y-2 text-xs">
               <li>
                 <Link href="/social" className="hover:text-slate-900 transition-colors">
-                  Squad Rosters &amp; Invites
+                  My Squad &amp; Invites
                 </Link>
               </li>
               <li>

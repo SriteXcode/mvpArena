@@ -106,7 +106,6 @@ export default function Navbar() {
     { href: "/streams", label: "Live Streams", icon: Tv },
     { href: "/#how-it-works", label: "How It Works", icon: Sparkles },
     { href: "/leaderboards", label: "Standings", icon: Flame },
-    { href: "/social", label: "Rosters", icon: Users },
   ];
 
   return (
@@ -271,8 +270,8 @@ export default function Navbar() {
                         onClick={() => setShowUserMenu(false)}
                         className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-slate-700 hover:text-slate-900 hover:bg-slate-50 font-medium transition-colors"
                       >
-                        <Users className="h-3.5 w-3.5 text-slate-500" />
-                        <span>Squad Roster &amp; Invites</span>
+                        <Users className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>My Squad</span>
                       </Link>
 
                       <Link
