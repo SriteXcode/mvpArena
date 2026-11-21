@@ -747,7 +747,7 @@ export default function AuthModal() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Unique Username (User ID)
+                    Username (User ID)
                   </label>
                   <input
                     type="text"
