@@ -1,0 +1,57 @@
+name: MVP Arena CI/CD Pipeline
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-verify:
+    name: Build & Verify Production App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install Client Dependencies
+        run: |
+          cd client
+          npm ci
+
+      - name: TypeScript Static Typecheck
+        run: |
+          cd client
+          npx tsc --noEmit --incremental false
+
+      - name: Next.js Production Build
+        run: |
+          cd client
+          npm run build
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_APP_URL: "https://mvparena.gg"
+          MONGODB_URI: "mongodb://localhost:27017/playarena"
+          AUTH_SECRET: "ci_cd_test_secret_key_mvparena_2026"
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY || 'BAiZJjKX6wSg0OeyHcvT2TswjFab_k4qvlz2f3JZItV9VlyZ2GbzTMh7jhuEvV3MAoTim7SMcYPxF6E8IidZRGA' }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY || 'nV9CgySpXRV3Y6jRndjw6jIMLB3IQqA3v2EwF_Wc3Eg' }}
+          VAPID_SUBJECT: "mailto:riteshg0fficial@gmail.com"
+
+      - name: Trigger Render Deploy Hook (Optional)
+        if: github.ref == 'refs/heads/master' && success()
+        run: |
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "Triggering automated Render deployment hook..."
+            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          else
+            echo "RENDER_DEPLOY_HOOK_URL not configured. Render auto-deploys via GitHub push."
+          fi

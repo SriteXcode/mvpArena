@@ -1,0 +1,63 @@
+# ==============================================================================
+# MVP ARENA - RENDER BLUEPRINT DEPLOYMENT CONFIGURATION
+# Docs: https://render.com/docs/blueprint-spec
+# ==============================================================================
+
+services:
+  - type: web
+    name: mvp-arena
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: client
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+
+      - key: MONGODB_URI
+        sync: false
+
+      - key: AUTH_SECRET
+        generateValue: true
+
+      - key: VAPID_PUBLIC_KEY
+        value: BAiZJjKX6wSg0OeyHcvT2TswjFab_k4qvlz2f3JZItV9VlyZ2GbzTMh7jhuEvV3MAoTim7SMcYPxF6E8IidZRGA
+
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+
+      - key: VAPID_SUBJECT
+        value: mailto:riteshg0fficial@gmail.com
+
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+
+      - key: SMTP_PORT
+        value: 587
+
+      - key: SMTP_SECURE
+        value: false
+
+      - key: SMTP_USER
+        sync: false
+
+      - key: SMTP_PASS
+        sync: false
+
+      - key: EMAIL_FROM
+        value: MVP Arena <riteshg0fficial@gmail.com>
+
+      - key: WHATSAPP_API_VERSION
+        value: v25.0
+
+      - key: WHATSAPP_PHONE_ID
+        value: 1406383182562797
+
+      - key: WHATSAPP_API_TOKEN
+        sync: false
