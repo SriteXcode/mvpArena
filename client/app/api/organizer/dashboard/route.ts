@@ -5,9 +5,11 @@ import Tournament from "@/models/Tournament";
 import Match from "@/models/Match";
 import ResultSubmission from "@/models/ResultSubmission";
 import PayoutTransaction from "@/models/PayoutTransaction";
+import { requireRole } from "@/lib/auth";
 
 export async function GET() {
   try {
+    await requireRole(["organizer", "super_admin"]);
     await connectToDatabase();
 
     // Find primary organizer or create a minimal clean one if completely fresh

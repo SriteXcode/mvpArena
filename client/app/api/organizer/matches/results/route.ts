@@ -8,9 +8,11 @@ import PlayerStat from "@/models/PlayerStat";
 import TournamentRegistration from "@/models/TournamentRegistration";
 import { recalculateTournamentLeaderboard } from "@/lib/scoring/engine";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { requireRole } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
+    await requireRole(["organizer", "super_admin"]);
     await connectToDatabase();
     const body = await request.json();
     const {

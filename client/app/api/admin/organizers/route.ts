@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import connectToDatabase from "@/lib/mongodb";
 import Organizer from "@/models/Organizer";
+import { requireRole } from "@/lib/auth";
 
 export async function GET() {
   try {
+    await requireRole(["super_admin"]);
     await connectToDatabase();
     const organizers = await Organizer.find().sort({ createdAt: -1 });
     return NextResponse.json({ success: true, data: organizers });
@@ -17,6 +19,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    await requireRole(["super_admin"]);
     await connectToDatabase();
     const body = await request.json();
     const { organizerId, commissionRate, status } = body;

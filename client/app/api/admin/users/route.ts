@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import connectToDatabase from "@/lib/mongodb";
 import User from "@/models/User";
 import PayoutTransaction from "@/models/PayoutTransaction";
+import { requireRole } from "@/lib/auth";
 
 export async function GET() {
   try {
+    await requireRole(["super_admin"]);
     await connectToDatabase();
     const dbUsers = await User.find()
       .select("-passwordHash")
@@ -24,6 +26,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    await requireRole(["super_admin"]);
     await connectToDatabase();
     const body = await request.json();
     const { userId, recipientName, upiId, amount, transactionType, notes } = body;

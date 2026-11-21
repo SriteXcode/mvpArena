@@ -50,3 +50,38 @@ export async function getCurrentUser(): Promise<TokenPayload | null> {
     return null;
   }
 }
+
+/**
+ * Strict authentication check. Throws UNAUTHORIZED if not logged in.
+ */
+export async function requireAuth(): Promise<TokenPayload> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("UNAUTHORIZED");
+  }
+  return user;
+}
+
+/**
+ * Strict role-based authorization check. Throws UNAUTHORIZED or FORBIDDEN.
+ */
+export async function requireRole(
+  allowedRoles: ("player" | "organizer" | "super_admin")[]
+): Promise<TokenPayload> {
+  const user = await requireAuth();
+  if (!allowedRoles.includes(user.role)) {
+    throw new Error("FORBIDDEN");
+  }
+  return user;
+}
+
+export function handleAuthError(error: unknown) {
+  const message = (error as Error).message;
+  if (message === "UNAUTHORIZED") {
+    return { status: 401, error: "Access denied: Authentication required." };
+  }
+  if (message === "FORBIDDEN") {
+    return { status: 403, error: "Access denied: Insufficient permissions for this resource." };
+  }
+  return { status: 500, error: message || "Internal server error." };
+}

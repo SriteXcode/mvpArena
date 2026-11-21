@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import connectToDatabase from "@/lib/mongodb";
 import Tournament from "@/models/Tournament";
 import Organizer from "@/models/Organizer";
+import { requireRole } from "@/lib/auth";
 
 export async function GET(request: Request) {
   try {
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    await requireRole(["organizer", "super_admin"]);
     await connectToDatabase();
     const body = await request.json();
 

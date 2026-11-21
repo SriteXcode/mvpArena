@@ -76,16 +76,6 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/organizer/dashboard" className="hover:text-slate-900 transition-colors">
-                  Organizer Control Hub
-                </Link>
-              </li>
-              <li>
-                <Link href="/admin/dashboard" className="hover:text-slate-900 transition-colors">
-                  Platform Oversight
-                </Link>
-              </li>
-              <li>
                 <Link href="/contact" className="hover:text-emerald-600 transition-colors">
                   Contact Support &amp; Help Desk
                 </Link>

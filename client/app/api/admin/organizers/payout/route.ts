@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import connectToDatabase from "@/lib/mongodb";
 import Organizer from "@/models/Organizer";
 import PayoutTransaction from "@/models/PayoutTransaction";
+import { requireRole } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
+    await requireRole(["super_admin"]);
     await connectToDatabase();
     const body = await request.json();
     const { organizerId, orgName, upiId, amount, notes } = body;

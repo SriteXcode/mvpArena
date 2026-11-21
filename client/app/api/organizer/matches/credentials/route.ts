@@ -4,9 +4,11 @@ import Tournament from "@/models/Tournament";
 import Match from "@/models/Match";
 import TournamentRegistration from "@/models/TournamentRegistration";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { requireRole } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
+    await requireRole(["organizer", "super_admin"]);
     await connectToDatabase();
     const body = await request.json();
     const { tournamentId, roomId, roomPassword, matchId } = body;

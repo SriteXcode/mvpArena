@@ -16,7 +16,8 @@ export async function POST(req: NextRequest) {
 
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedUsername = username.toLowerCase().trim();
-    const assignedRole = role === "organizer" ? "organizer" : "player";
+    // Strict Role Enforcement: All public registrations are assigned 'player' by default
+    const assignedRole: "player" = "player";
     const refCode = `${normalizedUsername.slice(0, 4).toUpperCase()}${Math.floor(1000 + Math.random() * 9000)}`;
 
     let userPayload: TokenPayload | null = null;

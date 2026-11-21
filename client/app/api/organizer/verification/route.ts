@@ -4,9 +4,11 @@ import ResultSubmission from "@/models/ResultSubmission";
 import { recalculateTournamentLeaderboard } from "@/lib/scoring/engine";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import User from "@/models/User";
+import { requireRole } from "@/lib/auth";
 
 export async function GET() {
   try {
+    await requireRole(["organizer", "super_admin"]);
     await connectToDatabase();
     const pending = await ResultSubmission.find({ status: "pending" })
       .populate("tournament", "title game")
@@ -24,6 +26,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    await requireRole(["organizer", "super_admin"]);
     await connectToDatabase();
     const body = await request.json();
     const { submissionId, action, rejectionReason } = body;

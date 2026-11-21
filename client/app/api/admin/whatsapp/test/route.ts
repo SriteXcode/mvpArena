@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { requireRole } from "@/lib/auth";
 
 // POST /api/admin/whatsapp/test
 // Test Meta WhatsApp Cloud API endpoint directly
 export async function POST(req: NextRequest) {
   try {
+    await requireRole(["super_admin"]);
     const body = await req.json();
     const { toPhone, token, phoneId, templateName, parameters } = body;
 

@@ -2,20 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import connectToDatabase from "@/lib/mongodb";
 import Campaign from "@/models/Campaign";
 import User from "@/models/User";
-import { getCurrentUser } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
 
 // GET /api/admin/campaigns - List past campaign dispatches and subscriber metrics
 export async function GET() {
   try {
+    await requireRole(["super_admin"]);
     await connectToDatabase();
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json(
-        { success: false, error: "Authentication required" },
-        { status: 401 }
-      );
-    }
 
     const campaigns = await Campaign.find()
       .populate("sentBy", "name username email")
@@ -48,14 +42,8 @@ export async function GET() {
 // POST /api/admin/campaigns - Compose and broadcast an institutional email campaign
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireRole(["super_admin"]);
     await connectToDatabase();
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json(
-        { success: false, error: "Authentication required" },
-        { status: 401 }
-      );
-    }
 
     const body = await req.json();
     const { title, subject, content, targetAudience = "all", ctaText, ctaUrl } = body;
