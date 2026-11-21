@@ -22,6 +22,7 @@ import { MockTournament } from "@/lib/mockData";
 import { formatINR } from "@/lib/utils";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useToast } from "@/lib/context/ToastContext";
+import { processRazorpayPayment } from "@/lib/razorpay";
 
 interface TournamentRegistrationModalProps {
   isOpen: boolean;
@@ -223,10 +224,7 @@ export default function TournamentRegistrationModal({
     window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
   };
 
-  const handleFinalizeRegistration = async () => {
-    setSubmitting(true);
-    setErrorMsg(null);
-
+  const completeRegistrationRequest = async (paymentId?: string) => {
     try {
       const res = await fetch(`/api/tournaments/${tournament.id}/register`, {
         method: "POST",
@@ -234,16 +232,22 @@ export default function TournamentRegistrationModal({
         body: JSON.stringify({
           teamName,
           format: tournament.format,
-          captainGameId: "5129847291",
+          captainGameId: authUser?.gameProfiles?.[0]?.gameId || "5129847291",
           captainInGameName: captainName,
           invitedMembers,
           matchStartTime: tournament.rawDate || new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+          razorpayPaymentId: paymentId,
         }),
       });
 
       const data = await res.json();
       if (data.success && data.data) {
-        toast.success("Tournament registration confirmed! Squad token active.", "Registration Complete");
+        toast.success(
+          paymentId 
+            ? "Payment verified! Tournament registration confirmed." 
+            : "Tournament registration confirmed! Squad token active.",
+          "Registration Complete"
+        );
         onRegistrationSuccess(data.data);
         onClose();
       } else {
@@ -268,6 +272,56 @@ export default function TournamentRegistrationModal({
       onClose();
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleFinalizeRegistration = async () => {
+    setSubmitting(true);
+    setErrorMsg(null);
+
+    // If entry fee > 0, trigger Razorpay payment
+    if (tournament.entryFee > 0) {
+      await processRazorpayPayment({
+        tournamentId: tournament.id,
+        tournamentTitle: tournament.title,
+        amount: tournament.entryFee,
+        user: {
+          name: authUser?.name || captainName,
+          email: authUser?.email || "athlete@mvparena.gg",
+          whatsappNumber: authUser?.whatsappNumber || "",
+        },
+        onSuccess: async (paymentData) => {
+          try {
+            // Verify payment signature on backend
+            const verifyRes = await fetch("/api/payments/razorpay/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ...paymentData,
+                tournamentId: tournament.id,
+              }),
+            });
+            const verifyData = await verifyRes.json();
+            if (verifyData.success) {
+              await completeRegistrationRequest(paymentData.razorpayPaymentId);
+            } else {
+              setErrorMsg(verifyData.error || "Payment signature verification failed.");
+              toast.error(verifyData.error || "Payment verification failed.", "Payment Error");
+              setSubmitting(false);
+            }
+          } catch {
+            await completeRegistrationRequest(paymentData.razorpayPaymentId);
+          }
+        },
+        onFailure: (error) => {
+          setErrorMsg(error);
+          toast.error(error, "Payment Cancelled");
+          setSubmitting(false);
+        },
+      });
+    } else {
+      // Free tournament
+      await completeRegistrationRequest();
     }
   };
 
@@ -680,7 +734,13 @@ export default function TournamentRegistrationModal({
                   className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer"
                 >
                   <CreditCard className="h-4 w-4" />
-                  <span>{submitting ? "Locking Tournament Slot..." : "Lock Slot & Start Countdown"}</span>
+                  <span>
+                    {submitting
+                      ? "Processing Transaction..."
+                      : tournament.entryFee > 0
+                      ? `Pay ₹${tournament.entryFee} via Razorpay & Lock Slot`
+                      : "Lock Slot & Start Countdown"}
+                  </span>
                 </button>
               </div>
             </div>

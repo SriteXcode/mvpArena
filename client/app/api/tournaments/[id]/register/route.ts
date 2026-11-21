@@ -84,6 +84,7 @@ export async function POST(
       captainInGameName,
       invitedMembers = [],
       matchStartTime,
+      razorpayPaymentId,
     } = body;
 
     if (!teamName || !teamName.trim()) {
@@ -141,7 +142,8 @@ export async function POST(
       isEarlyLocked: true,
       matchStartTime: matchDate.toISOString(),
       rosterLockedAt: rosterLockedAt.toISOString(),
-      paymentStatus: "completed",
+      paymentStatus: razorpayPaymentId ? "completed" : "free",
+      paymentId: razorpayPaymentId || undefined,
       credentialsDelivered: false,
       roomCredentials: {
         roomId: "882910",
@@ -177,7 +179,8 @@ export async function POST(
           maxMembers,
           isEarlyLocked: true,
           rosterLockedAt,
-          paymentStatus: "completed",
+          paymentStatus: razorpayPaymentId ? "completed" : "free",
+          paymentId: razorpayPaymentId || undefined,
           credentialsDelivered: false,
           roomCredentials: {
             roomId: "882910",
