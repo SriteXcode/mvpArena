@@ -1,16 +1,27 @@
 {
-  "name": "PlayArena Esports",
-  "short_name": "PlayArena",
-  "description": "India's premier multi-game, multi-organizer competitive esports tournament platform.",
+  "name": "MVP Arena",
+  "short_name": "MVP Arena",
+  "description": "India's premier competitive tournament platform for BGMI and Free Fire MAX.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#07090e",
-  "theme_color": "#07090e",
+  "background_color": "#020617",
+  "theme_color": "#10b981",
   "icons": [
     {
       "src": "/favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

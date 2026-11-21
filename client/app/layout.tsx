@@ -10,9 +10,47 @@ import { AuthProvider } from "@/lib/context/AuthContext";
 import { ToastProvider } from "@/lib/context/ToastContext";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://mvparena.onrender.com"),
   title: "MVP Arena | Professional Esports League for BGMI & Free Fire MAX",
   description:
     "India's premier competitive tournament platform for BGMI and Free Fire MAX. Verified custom rooms, automated standings, anti-cheat protected matches, and instant prize payouts.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/logo.png", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/logo.png" },
+    ],
+  },
+  openGraph: {
+    title: "MVP Arena | Professional Esports League for BGMI & Free Fire MAX",
+    description:
+      "India's premier competitive tournament platform for BGMI and Free Fire MAX. Verified custom rooms, automated standings, anti-cheat protected matches, and instant prize payouts.",
+    url: "https://mvparena.onrender.com",
+    siteName: "MVP Arena",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "MVP Arena Logo",
+      },
+    ],
+    locale: "en_IN",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MVP Arena | Professional Esports League for BGMI & Free Fire MAX",
+    description:
+      "India's premier competitive tournament platform for BGMI and Free Fire MAX.",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({
@@ -23,8 +61,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="light" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/logo.png" />
-        <link rel="apple-touch-icon" href="/logo.png" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
       </head>
       <body 
