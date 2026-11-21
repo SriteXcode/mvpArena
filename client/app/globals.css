@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+:root {
+  /* Modern Illuminated Tactical Esports Palette (Clean Light Theme) */
+  --bg-primary: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-elevated: #f1f5f9;
+  --bg-overlay: rgba(15, 23, 42, 0.5);
+
+  /* Precision Crisp Borders & Dividers */
+  --border-subtle: #e2e8f0;
+  --border-default: #cbd5e1;
+  --border-highlight: #94a3b8;
+
+  /* Typography Contrast */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-inverse: #ffffff;
+
+  /* Refined Tactical Accents (Vibrant & Crisp for Light Mode) */
+  --accent-emerald: #059669;     /* Verified & Success */
+  --accent-emerald-glow: rgba(5, 150, 105, 0.15);
+  --accent-crimson: #e11d48;     /* High Stakes & Elimination */
+  --accent-crimson-glow: rgba(225, 29, 72, 0.15);
+  --accent-amber: #d97706;       /* Podium Champion Gold */
+  --accent-amber-glow: rgba(217, 119, 6, 0.15);
+  --accent-cyan: #0284c7;        /* Room Credentials & Systems */
+  --accent-purple: #7c3aed;      /* Organizer & Tier-1 Tags */
+
+  /* Typography Tokens */
+  --font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  --line-height-body: 1.6;
+  --line-height-heading: 1.2;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+}
+
+body {
+  background-color: var(--bg-primary);
+  background-image: 
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(16, 185, 129, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 15%, rgba(56, 189, 248, 0.06), transparent),
+    radial-gradient(ellipse 70% 50% at 10% 80%, rgba(139, 92, 246, 0.04), transparent);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  font-family: var(--font-family-sans);
+  line-height: var(--line-height-body);
+  font-size: 0.9375rem;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overflow-x: hidden;
+  letter-spacing: -0.01em;
+}
+
+/* Modern Subtle Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-highlight);
+}
+
+/* Professional Glass & Surface Classes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.06);
+}
+
+.tactical-border {
+  position: relative;
+}
+
+.tactical-border::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 2px;
+  background-color: var(--accent-emerald);
+}
+
+/* Metallic Badges for Leaderboards */
+.badge-gold {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  color: #b45309;
+}
+
+.badge-silver {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+.badge-bronze {
+  background: #ffedd5;
+  border: 1px solid #fed7aa;
+  color: #c2410c;
+}
+
+/* Smooth Tab Transition Animations */
+@keyframes authSlideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes authSlideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.auth-form-enter-right {
+  animation: authSlideInRight 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.auth-form-enter-left {
+  animation: authSlideInLeft 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Hide scrollbars while preserving full scrollability */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
