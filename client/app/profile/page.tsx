@@ -24,6 +24,7 @@ import GameIdsVault from "@/components/GameIdsVault";
 import RegisteredEventsList from "@/components/RegisteredEventsList";
 import ShareInviteModal from "@/components/ShareInviteModal";
 import AchievementsHub from "@/components/AchievementsHub";
+import ImageDropzone from "@/components/ImageDropzone";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useToast } from "@/lib/context/ToastContext";
 
@@ -83,6 +84,7 @@ export default function ProfilePage() {
   const [editBio, setEditBio] = useState("");
   const [editWhatsapp, setEditWhatsapp] = useState("");
   const [editUpi, setEditUpi] = useState("");
+  const [editAvatar, setEditAvatar] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
 
   const fetchProfile = () => {
@@ -128,6 +130,7 @@ export default function ProfilePage() {
     setEditBio(user.bio || "");
     setEditWhatsapp(user.whatsappNumber || "");
     setEditUpi(user.upiId || "");
+    setEditAvatar(user.avatarUrl || "");
     setShowEditModal(true);
   };
 
@@ -153,6 +156,7 @@ export default function ProfilePage() {
           bio: editBio.trim(),
           whatsappNumber: editWhatsapp.trim(),
           upiId: editUpi.trim(),
+          avatarUrl: editAvatar.trim(),
         }),
       });
 
@@ -495,6 +499,15 @@ export default function ProfilePage() {
             </div>
 
             <form onSubmit={handleSaveProfile} className="space-y-3.5">
+              {/* Profile Avatar Drag-and-Drop */}
+              <ImageDropzone
+                value={editAvatar}
+                onChange={setEditAvatar}
+                aspectRatio="square"
+                label="Athlete Avatar (Profile Photo)"
+                hint="Drag & drop your picture, click to browse, or paste (Ctrl+V)"
+              />
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Full Athlete Name *

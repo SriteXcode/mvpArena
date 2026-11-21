@@ -143,6 +143,11 @@ export async function PUT(request: Request) {
       user.upiId = body.upiId.trim();
     }
 
+    // 5b. Avatar URL
+    if (typeof body.avatarUrl === "string" && body.avatarUrl.trim().length > 0) {
+      user.avatarUrl = body.avatarUrl.trim();
+    }
+
     // 6. Game Profile Upsert
     if (body.gameProfile && body.gameProfile.game && body.gameProfile.gameId) {
       const existingIdx = user.gameProfiles.findIndex((g: { game: string }) => g.game === body.gameProfile.game);

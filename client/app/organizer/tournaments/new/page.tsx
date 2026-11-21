@@ -14,6 +14,7 @@ import {
   Flame,
   FileImage
 } from "lucide-react";
+import ImageDropzone from "@/components/ImageDropzone";
 
 export default function NewTournamentWizardPage() {
   const router = useRouter();
@@ -182,20 +183,13 @@ export default function NewTournamentWizardPage() {
             {/* Step 2 */}
             {step === 2 && (
               <div className="space-y-3">
-                <label className="block text-xs font-medium text-slate-700">
-                  Event Cover Banner (16:9 Recommended)
-                </label>
-                <div className="relative rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-center">
-                  <img
-                    src={bannerUrl}
-                    alt="Cover preview"
-                    className="max-h-44 mx-auto rounded-lg object-cover mb-2 border border-slate-200"
-                  />
-                  <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-700 font-mono font-medium">
-                    <FileImage className="h-3.5 w-3.5 text-emerald-600" />
-                    <span>Artwork Stored &amp; Optimized</span>
-                  </div>
-                </div>
+                <ImageDropzone
+                  value={bannerUrl}
+                  onChange={setBannerUrl}
+                  aspectRatio="video"
+                  label="Event Cover Banner (16:9 Recommended)"
+                  hint="Drag & drop custom artwork, click to browse, or paste from clipboard (Ctrl+V)"
+                />
               </div>
             )}
 

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useToast } from "@/lib/context/ToastContext";
+import ImageDropzone from "@/components/ImageDropzone";
 
 export default function MatchLobbyPage() {
   const toast = useToast();
@@ -246,34 +247,13 @@ export default function MatchLobbyPage() {
               </div>
             </div>
 
-            {/* Proof Preview Box */}
-            <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1">
-                Official Result Screenshot
-              </label>
-              <div className="relative rounded-lg border border-dashed border-zinc-700 bg-[var(--bg-surface)] p-4 text-center hover:border-zinc-500 transition-all">
-                {screenshotUrl ? (
-                  <div className="space-y-2">
-                    <img
-                      src={screenshotUrl}
-                      alt="Match Result Summary"
-                      className="max-h-48 mx-auto rounded object-contain border border-[var(--border-subtle)]"
-                    />
-                    <div className="flex items-center justify-center gap-1.5 text-xs text-zinc-400 font-mono">
-                      <FileImage className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>match_summary_proof.png (Uploaded)</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <Upload className="h-6 w-6 text-zinc-500 mx-auto" />
-                    <span className="text-xs text-zinc-400 block">
-                      Click to upload in-game summary proof
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
+            {/* Proof Preview & Drag-and-Drop Dropzone */}
+            <ImageDropzone
+              value={screenshotUrl}
+              onChange={setScreenshotUrl}
+              label="Official Result Screenshot (Proof of Score)"
+              hint="Drag & drop your in-game summary proof, click to browse, or paste (Ctrl+V)"
+            />
 
             <button
               type="submit"
