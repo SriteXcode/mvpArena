@@ -758,9 +758,6 @@ export default function AuthModal() {
                     maxLength={20}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 shadow-xs font-normal"
                   />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">
-                    Unique platform handle (not your game numeric UID).
-                  </span>
                 </div>
               </div>
 
