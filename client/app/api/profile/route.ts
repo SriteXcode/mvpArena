@@ -37,6 +37,7 @@ export async function GET() {
       totalEliminations: 0,
       winCount: 0,
       bestRank: tournamentsCount > 0 ? 1 : 0,
+      squadMembersCount: user.friends?.length || 0,
     };
 
     if (userGameIds.length > 0) {
@@ -65,6 +66,7 @@ export async function GET() {
           totalEliminations: item.totalKills || 0,
           winCount: item.wins || 0,
           bestRank: item.bestRank || (tournamentsCount > 0 ? 1 : 0),
+          squadMembersCount: user.friends?.length || 0,
         };
       }
     }

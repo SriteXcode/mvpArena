@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { 
   Award, 
   Flame, 
@@ -20,11 +20,69 @@ import {
 import { MOCK_ACHIEVEMENTS, MockAchievement } from "@/lib/mockData";
 import { useToast } from "@/lib/context/ToastContext";
 
-export default function AchievementsHub() {
+interface AchievementsHubProps {
+  userStats?: {
+    tournamentsPlayed?: number;
+    matchesPlayed?: number;
+    totalEliminations?: number;
+    winCount?: number;
+    bestRank?: number;
+    squadMembersCount?: number;
+  };
+}
+
+export default function AchievementsHub({ userStats }: AchievementsHubProps) {
   const toast = useToast();
-  const [achievements, setAchievements] = useState<MockAchievement[]>(MOCK_ACHIEVEMENTS);
+  const [claimedIds, setClaimedIds] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState<"all" | "combat" | "tournament" | "squad" | "weekend">("all");
   const [claimedRewardMessage, setClaimedRewardMessage] = useState<string | null>(null);
+
+  // Load claimed milestone IDs from localStorage safely
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("playarena_claimed_milestones");
+      if (saved) {
+        setClaimedIds(JSON.parse(saved));
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  // Dynamically compute milestone progression from real athlete stats
+  const achievements = useMemo<MockAchievement[]>(() => {
+    const kills = userStats?.totalEliminations || 0;
+    const tourneys = userStats?.tournamentsPlayed || 0;
+    const wins = userStats?.winCount || 0;
+    const squad = userStats?.squadMembersCount || 0;
+
+    return MOCK_ACHIEVEMENTS.map((ach) => {
+      let currentValue = 0;
+      if (ach.id === "ach_01" || ach.id === "ach_02" || ach.id === "ach_03") {
+        currentValue = kills;
+      } else if (ach.id === "ach_04") {
+        currentValue = tourneys;
+      } else if (ach.id === "ach_05") {
+        currentValue = wins;
+      } else if (ach.id === "ach_06") {
+        currentValue = 0; // Weekend mega stages
+      } else if (ach.id === "ach_07") {
+        currentValue = 0; // Daily consecutive scrim streak
+      } else if (ach.id === "ach_08") {
+        currentValue = squad;
+      }
+
+      const isUnlocked = ach.targetValue > 0 && currentValue >= ach.targetValue;
+      const isClaimed = isUnlocked && claimedIds.includes(ach.id);
+
+      return {
+        ...ach,
+        currentValue,
+        isUnlocked,
+        isClaimed,
+      };
+    });
+  }, [userStats, claimedIds]);
 
   const filteredAchievements = achievements.filter((a) => {
     if (activeCategory === "all") return true;
@@ -40,11 +98,13 @@ export default function AchievementsHub() {
     .reduce((acc, curr) => acc + parseInt(curr.rewardValue, 10), 0);
 
   const handleClaimReward = (id: string, title: string, rewardFormatted: string) => {
-    setAchievements((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, isClaimed: true } : item
-      )
-    );
+    const nextClaimed = [...claimedIds, id];
+    setClaimedIds(nextClaimed);
+    try {
+      localStorage.setItem("playarena_claimed_milestones", JSON.stringify(nextClaimed));
+    } catch {
+      // Ignore storage errors
+    }
 
     toast.success(`Claimed ${rewardFormatted} for completing "${title}"!`, "Milestone Reward");
     setClaimedRewardMessage(

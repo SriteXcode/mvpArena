@@ -40,6 +40,7 @@ interface UserProfileData {
     totalEliminations: number;
     winCount: number;
     bestRank: number;
+    squadMembersCount?: number;
   };
 }
 
@@ -64,6 +65,7 @@ export default function ProfilePage() {
       totalEliminations: 0,
       winCount: 0,
       bestRank: 0,
+      squadMembersCount: 0,
     },
   });
 
@@ -361,7 +363,7 @@ export default function ProfilePage() {
           </span>
         </div>
 
-        <AchievementsHub />
+        <AchievementsHub userStats={user.stats} />
       </div>
 
       {/* ================= EDIT PROFILE MODAL ================= */}
