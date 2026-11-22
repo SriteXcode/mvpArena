@@ -46,7 +46,7 @@ import {
 import ImageDropzone from "@/components/ImageDropzone";
 import DashboardSkeleton from "@/components/skeletons/DashboardSkeleton";
 import { useToast } from "@/lib/context/ToastContext";
-import { formatINR } from "@/lib/utils";
+import { formatINR, normalizeStreamUrl } from "@/lib/utils";
 
 function YoutubeIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
@@ -362,13 +362,20 @@ export default function OrganizerDashboardPage() {
     }
 
     try {
+      const normalizedCreateStream = createForm.youtubeStreamUrl
+        ? normalizeStreamUrl(createForm.youtubeStreamUrl)
+        : "";
+      const payload = {
+        ...createForm,
+        youtubeStreamUrl: normalizedCreateStream,
+        streamUrl: normalizedCreateStream,
+        prizeDistribution: prizeRanks,
+      };
+
       const res = await fetch("/api/tournaments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...createForm,
-          prizeDistribution: prizeRanks,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success && data.data) {
@@ -380,14 +387,14 @@ export default function OrganizerDashboardPage() {
         } else {
           toast.success("Tournament published and live on PlayArena public marketplace!", "Event Created");
         }
-        if (createForm.youtubeStreamUrl) {
+        if (normalizedCreateStream) {
           try {
-            localStorage.setItem("mvp_stream_active", createForm.youtubeStreamUrl);
+            localStorage.setItem("mvp_stream_active", normalizedCreateStream);
             if (data.data._id) {
-              localStorage.setItem(`mvp_stream_${data.data._id}`, createForm.youtubeStreamUrl);
+              localStorage.setItem(`mvp_stream_${data.data._id}`, normalizedCreateStream);
             }
             if (data.data.slug) {
-              localStorage.setItem(`mvp_stream_${data.data.slug}`, createForm.youtubeStreamUrl);
+              localStorage.setItem(`mvp_stream_${data.data.slug}`, normalizedCreateStream);
             }
           } catch {}
         }
@@ -449,42 +456,64 @@ export default function OrganizerDashboardPage() {
     }
   };
 
-  // 3. Handle Update Credentials
+  // 3. Handle Update Credentials & Stream Link
   const handleUpdateCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!credentialForm.roomId.trim() || !credentialForm.roomPassword.trim()) {
-      toast.warning("Both Room ID and Room Password are required.", "Missing Credentials");
+    const hasRoom = Boolean(credentialForm.roomId.trim() && credentialForm.roomPassword.trim());
+    const normalizedStream = credentialForm.youtubeStreamUrl ? normalizeStreamUrl(credentialForm.youtubeStreamUrl) : "";
+    const hasStream = Boolean(normalizedStream);
+
+    if (!hasRoom && !hasStream) {
+      toast.warning("Please provide either Room credentials or a Live Stream link.", "Nothing to Save");
       return;
     }
 
-    if (credentialForm.youtubeStreamUrl) {
+    if (hasStream) {
       try {
-        localStorage.setItem(`mvp_stream_${credentialForm.tournamentId}`, credentialForm.youtubeStreamUrl);
-        localStorage.setItem("mvp_stream_active", credentialForm.youtubeStreamUrl);
+        if (credentialForm.tournamentId) {
+          localStorage.setItem(`mvp_stream_${credentialForm.tournamentId}`, normalizedStream);
+        }
+        localStorage.setItem("mvp_stream_active", normalizedStream);
       } catch {}
     }
 
     try {
+      const payload = {
+        ...credentialForm,
+        youtubeStreamUrl: normalizedStream,
+        streamUrl: normalizedStream,
+      };
+
       const res = await fetch("/api/organizer/matches/credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(credentialForm),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
-        toast.success("Room ID & Password saved successfully!", "Credentials Stored");
-        toast.info("Lobby credentials will unlock for players exactly 10 min before match time.", "Automated Release");
+        if (hasRoom && hasStream) {
+          toast.success("Room ID, Password & Live Stream link saved successfully!", "Credentials & Stream Stored");
+        } else if (hasStream) {
+          toast.success("Live stream link activated and published to tournament page!", "Stream Link Updated");
+        } else {
+          toast.success("Room ID & Password saved successfully!", "Credentials Stored");
+        }
+        if (hasRoom) {
+          toast.info("Lobby credentials will unlock for players exactly 10 min before match time.", "Automated Release");
+        }
         setTournaments(
           tournaments.map((t) =>
-            t._id === credentialForm.tournamentId
+            t._id === credentialForm.tournamentId || t.slug === credentialForm.tournamentId
               ? {
                   ...t,
-                  matchRoomCredentials: {
-                    roomId: credentialForm.roomId,
-                    roomPassword: credentialForm.roomPassword,
-                  },
-                  youtubeStreamUrl: credentialForm.youtubeStreamUrl,
-                  streamUrl: credentialForm.youtubeStreamUrl,
+                  matchRoomCredentials: hasRoom
+                    ? {
+                        roomId: credentialForm.roomId,
+                        roomPassword: credentialForm.roomPassword,
+                      }
+                    : t.matchRoomCredentials,
+                  youtubeStreamUrl: hasStream ? normalizedStream : t.youtubeStreamUrl,
+                  streamUrl: hasStream ? normalizedStream : t.streamUrl,
                 }
               : t
           )
@@ -2178,11 +2207,10 @@ export default function OrganizerDashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Custom In-Game Room ID *
+                    Custom In-Game Room ID <span className="text-slate-400 font-normal">(Optional if setting stream)</span>
                   </label>
                   <input
                     type="text"
-                    required
                     placeholder="e.g. 5928192"
                     value={credentialForm.roomId}
                     onChange={(e) => setCredentialForm({ ...credentialForm, roomId: e.target.value })}
@@ -2192,11 +2220,10 @@ export default function OrganizerDashboardPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Room Password *
+                    Room Password <span className="text-slate-400 font-normal">(Optional if setting stream)</span>
                   </label>
                   <input
                     type="text"
-                    required
                     placeholder="e.g. playarena77"
                     value={credentialForm.roomPassword}
                     onChange={(e) => setCredentialForm({ ...credentialForm, roomPassword: e.target.value })}
@@ -2206,35 +2233,53 @@ export default function OrganizerDashboardPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                  <YoutubeIcon className="h-3.5 w-3.5 fill-red-600" />
-                  <span>YouTube Live Stream Link (Optional)</span>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <YoutubeIcon className="h-3.5 w-3.5 fill-red-600" />
+                    <span>Official Live Stream Link (YouTube / Twitch / Kick)</span>
+                  </span>
+                  {credentialForm.youtubeStreamUrl && (
+                    <a
+                      href={normalizeStreamUrl(credentialForm.youtubeStreamUrl)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] font-semibold text-red-600 hover:text-red-700 flex items-center gap-1"
+                    >
+                      <span>Test Stream Link ↗</span>
+                    </a>
+                  )}
                 </label>
                 <input
                   type="url"
                   placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
                   value={credentialForm.youtubeStreamUrl || ""}
                   onChange={(e) => setCredentialForm({ ...credentialForm, youtubeStreamUrl: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900"
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900 focus:border-red-500 focus:ring-1 focus:ring-red-500"
                 />
                 <span className="text-[11px] text-slate-500 mt-1 block">
-                  Caster or observer live stream link displayed prominently on tournament page and spectator feeds.
+                  Caster or observer live stream link displayed prominently on tournament page and spectator feeds with an instant redirect button.
                 </span>
               </div>
 
               <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
                 <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="leading-relaxed text-[11px]">
-                  <strong>Automated Security Rule:</strong> These credentials remain encrypted on the server until exactly <strong>10 minutes before the scheduled match start</strong>. At that moment, registered team players receive push &amp; WhatsApp alerts with room details.
+                  <strong>Automated Security Rule:</strong> Room credentials remain encrypted on the server until exactly <strong>10 minutes before the scheduled match start</strong>. The live stream link is published immediately so fans and players can watch caster coverage.
                 </p>
               </div>
 
               <button
                 type="submit"
-                className="py-2.5 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 shadow-sm"
+                className="py-2.5 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 shadow-sm cursor-pointer"
               >
                 <Key className="h-4 w-4 text-emerald-400" />
-                <span>Save &amp; Schedule Room Credentials</span>
+                <span>
+                  {credentialForm.roomId && credentialForm.roomPassword && credentialForm.youtubeStreamUrl
+                    ? "Save Credentials & Live Stream Link"
+                    : credentialForm.youtubeStreamUrl
+                    ? "Save & Activate Stream Link"
+                    : "Save & Schedule Room Credentials"}
+                </span>
               </button>
             </form>
           )}

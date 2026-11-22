@@ -7,7 +7,7 @@ export interface ITeamMember {
   gameId: string; // Character UID (e.g. 5129847291)
   inGameName: string;
   role: TacticalRole;
-  status: "active" | "invited" | "declined";
+  status: "active" | "invited" | "waiting_for_login" | "declined";
   joinedAt: Date;
 }
 
@@ -37,7 +37,7 @@ const TeamMemberSchema = new Schema<ITeamMember>({
   },
   status: {
     type: String,
-    enum: ["active", "invited", "declined"],
+    enum: ["active", "invited", "waiting_for_login", "declined"],
     default: "active",
   },
   joinedAt: { type: Date, default: Date.now },

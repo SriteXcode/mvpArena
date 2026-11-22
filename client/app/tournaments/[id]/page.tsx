@@ -26,8 +26,8 @@ import {
   Search,
   X
 } from "lucide-react";
-import { useParams } from "next/navigation";
-import { formatINR } from "@/lib/utils";
+import { useParams, useSearchParams } from "next/navigation";
+import { formatINR, normalizeStreamUrl } from "@/lib/utils";
 import { MOCK_TOURNAMENTS } from "@/lib/mockData";
 import TournamentDetailSkeleton from "@/components/skeletons/TournamentDetailSkeleton";
 import { useToast } from "@/lib/context/ToastContext";
@@ -37,6 +37,7 @@ import { useAuth } from "@/lib/context/AuthContext";
 const ShareInviteModal = dynamic(() => import("@/components/ShareInviteModal"), { ssr: false });
 const TournamentRegistrationModal = dynamic(() => import("@/components/TournamentRegistrationModal"), { ssr: false });
 const TournamentCountdownBanner = dynamic(() => import("@/components/TournamentCountdownBanner"), { ssr: false });
+const JoinSquadTokenModal = dynamic(() => import("@/components/JoinSquadTokenModal"), { ssr: false });
 
 function YoutubeIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
@@ -44,6 +45,32 @@ function YoutubeIcon({ className = "h-4 w-4" }: { className?: string }) {
       <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
     </svg>
   );
+}
+
+function getYouTubeWatchUrl(url?: string): string {
+  if (!url) return "";
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
+    if (parsed.hostname.includes("youtube.com")) {
+      const v = parsed.searchParams.get("v");
+      if (v) return `https://www.youtube.com/watch?v=${v}`;
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (parts[0] === "live" && parts[1]) {
+        return `https://www.youtube.com/live/${parts[1]}`;
+      }
+      if (parts[0] === "embed" && parts[1]) {
+        return `https://www.youtube.com/watch?v=${parts[1]}`;
+      }
+    }
+    if (parsed.hostname.includes("youtu.be")) {
+      const id = parsed.pathname.slice(1);
+      if (id) return `https://www.youtube.com/watch?v=${id}`;
+    }
+    return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+  } catch {
+    return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+  }
 }
 
 function getYouTubeEmbedUrl(url?: string): string | null {
@@ -84,6 +111,9 @@ export default function TournamentDetailPage() {
     (m) => m.id === tournamentId || m.slug === tournamentId
   );
 
+  const searchParams = useSearchParams();
+  const urlToken = searchParams?.get("token") || searchParams?.get("squadToken") || "";
+
   const [tournament, setTournament] = useState<any>(() => {
     let localStream = "";
     if (typeof window !== "undefined") {
@@ -91,7 +121,8 @@ export default function TournamentDetailPage() {
         localStream = localStorage.getItem(`mvp_stream_${tournamentId}`) || localStorage.getItem("mvp_stream_active") || "";
       } catch {}
     }
-    const defaultStream = localStream || matchedMock?.youtubeStreamUrl || matchedMock?.streamUrl || "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1";
+    const rawDefault = localStream || matchedMock?.youtubeStreamUrl || matchedMock?.streamUrl || "";
+    const defaultStream = normalizeStreamUrl(rawDefault);
 
     return {
       id: tournamentId,
@@ -122,19 +153,26 @@ export default function TournamentDetailPage() {
 
   const [showRegModal, setShowRegModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showJoinTokenModal, setShowJoinTokenModal] = useState(Boolean(urlToken));
   const [registration, setRegistration] = useState<any>(null);
+  const [pendingInvite, setPendingInvite] = useState<any>(null);
+  const [respondingInvite, setRespondingInvite] = useState(false);
   const [editingStream, setEditingStream] = useState(false);
   const [streamInput, setStreamInput] = useState("");
   const [savingStream, setSavingStream] = useState(false);
   const [copiedStream, setCopiedStream] = useState(false);
 
   const handleSaveStream = async (urlToSave?: string) => {
-    const finalUrl = (urlToSave !== undefined ? urlToSave : streamInput).trim();
+    const rawUrl = (urlToSave !== undefined ? urlToSave : streamInput).trim();
+    const finalUrl = rawUrl ? normalizeStreamUrl(rawUrl) : "";
     setSavingStream(true);
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem(`mvp_stream_${tournamentId}`, finalUrl);
         localStorage.setItem("mvp_stream_active", finalUrl);
+        if (tournament?.slug) {
+          localStorage.setItem(`mvp_stream_${tournament.slug}`, finalUrl);
+        }
       } catch {}
     }
     setTournament((prev: any) => ({
@@ -183,6 +221,53 @@ export default function TournamentDetailPage() {
       .catch(() => {});
   };
 
+  const fetchInvitations = () => {
+    fetch(`/api/tournaments/${tournamentId}/invitations`)
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && res.hasPendingInvite && res.registration) {
+          setPendingInvite(res.registration);
+        } else {
+          setPendingInvite(null);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const handleRespondInvite = async (action: "accept" | "reject") => {
+    if (!pendingInvite) return;
+    setRespondingInvite(true);
+    try {
+      const res = await fetch(`/api/tournaments/${tournamentId}/invitations/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          registrationId: pendingInvite.id,
+          action,
+          gameId: user?.gameProfiles?.[0]?.gameId || "",
+          inGameName: user?.gameProfiles?.[0]?.inGameName || user?.name || user?.username,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (action === "accept") {
+          toast.success(data.message || "Successfully joined squad!", "Squad Joined");
+          setRegistration(data.data);
+        } else {
+          toast.info(data.message || "Declined invitation. That slot is now open.", "Invitation Declined");
+        }
+        setPendingInvite(null);
+        fetchRegistration();
+      } else {
+        toast.error(data.message || "Failed to respond to invitation.", "Response Error");
+      }
+    } catch {
+      toast.error("Failed to connect to the server.", "Network Error");
+    } finally {
+      setRespondingInvite(false);
+    }
+  };
+
   React.useEffect(() => {
     if (tournamentId === "join-token") {
       window.location.replace("/join");
@@ -201,7 +286,8 @@ export default function TournamentDetailPage() {
       .then((res) => {
         if (res.success && res.data) {
           const t = res.data;
-          const streamUrl = localStream || t.youtubeStreamUrl || t.streamUrl || matchedMock?.youtubeStreamUrl || matchedMock?.streamUrl || "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1";
+          const rawStream = t.youtubeStreamUrl || t.streamUrl || localStream || matchedMock?.youtubeStreamUrl || matchedMock?.streamUrl || "";
+          const streamUrl = normalizeStreamUrl(rawStream);
           setTournament({
             id: t._id || t.id,
             title: t.title,
@@ -235,17 +321,19 @@ export default function TournamentDetailPage() {
             },
           });
         } else if (matchedMock) {
+          const rawMock = localStream || matchedMock.youtubeStreamUrl || matchedMock.streamUrl || "";
           setTournament({
             ...matchedMock,
-            youtubeStreamUrl: localStream || matchedMock.youtubeStreamUrl || matchedMock.streamUrl || "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
+            youtubeStreamUrl: normalizeStreamUrl(rawMock),
           });
         }
       })
       .catch(() => {
         if (matchedMock) {
+          const rawMock = localStream || matchedMock.youtubeStreamUrl || matchedMock.streamUrl || "";
           setTournament({
             ...matchedMock,
-            youtubeStreamUrl: localStream || matchedMock.youtubeStreamUrl || matchedMock.streamUrl || "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
+            youtubeStreamUrl: normalizeStreamUrl(rawMock),
           });
         }
       })
@@ -254,7 +342,8 @@ export default function TournamentDetailPage() {
       });
 
     fetchRegistration();
-  }, [tournamentId]);
+    fetchInvitations();
+  }, [tournamentId, user]);
 
   if (isLoading) {
     return <TournamentDetailSkeleton />;
@@ -262,6 +351,56 @@ export default function TournamentDetailPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+      {/* Pending Squad Invitation Alert Banner */}
+      {pendingInvite && (
+        <div className="p-4 sm:p-5 rounded-2xl border-2 border-emerald-500 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="h-11 w-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <Users className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-bold text-slate-900">
+                  Squad Invitation from {pendingInvite.captainName}
+                </span>
+                {pendingInvite.captainUsername && (
+                  <span className="text-xs font-mono font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                    @{pendingInvite.captainUsername}
+                  </span>
+                )}
+                <span className="text-[10px] font-mono uppercase bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded-full border border-amber-300">
+                  Action Required
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                You have been invited to join squad <strong className="text-slate-900 font-bold">&quot;{pendingInvite.teamName}&quot;</strong> for this tournament!
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => handleRespondInvite("accept")}
+              disabled={respondingInvite}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+            >
+              <Check className="h-4 w-4" />
+              <span>{respondingInvite ? "Confirming..." : "Accept & Join Squad"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRespondInvite("reject")}
+              disabled={respondingInvite}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 text-xs font-semibold transition-all shadow-2xs disabled:opacity-50 cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+              <span>Decline</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner Hero */}
       <div className="relative rounded-2xl border border-slate-200 bg-slate-950 overflow-hidden shadow-sm">
         <div className="relative min-h-[260px] sm:min-h-[300px] md:min-h-[280px] w-full flex flex-col justify-between p-4 sm:p-6">
@@ -294,32 +433,38 @@ export default function TournamentDetailPage() {
             </div>
 
             <div className="flex items-center gap-2 self-start md:self-auto flex-wrap shrink-0">
-              <a
-                href={tournament.youtubeStreamUrl || "#official-stream"}
-                target={tournament.youtubeStreamUrl ? "_blank" : undefined}
-                rel={tournament.youtubeStreamUrl ? "noopener noreferrer" : undefined}
-                onClick={(e) => {
-                  if (!tournament.youtubeStreamUrl && typeof document !== "undefined") {
-                    e.preventDefault();
-                    document.getElementById("official-stream")?.scrollIntoView({ behavior: "smooth" });
-                  }
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-red-600/25 transition-all cursor-pointer"
-              >
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-                </span>
-                <YoutubeIcon className="h-4 w-4 fill-white" />
-                <span>View Live Match Stream</span>
-                {tournament.youtubeStreamUrl ? (
-                  <ExternalLink className="h-3.5 w-3.5 opacity-80" />
-                ) : (
-                  <span className="text-[10px] font-mono uppercase bg-red-700/60 px-1.5 py-0.5 rounded text-white/90">
-                    Standby
+              {tournament.youtubeStreamUrl ? (
+                <a
+                  href={getYouTubeWatchUrl(tournament.youtubeStreamUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-red-600/25 transition-all cursor-pointer"
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
                   </span>
-                )}
-              </a>
+                  <YoutubeIcon className="h-4 w-4 fill-white" />
+                  <span>Watch Live Match Stream</span>
+                  <ExternalLink className="h-3.5 w-3.5 opacity-80" />
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const streamSec = document.getElementById("official-stream");
+                    if (streamSec) streamSec.scrollIntoView({ behavior: "smooth" });
+                    if (isOrganizer) {
+                      setEditingStream(true);
+                      setStreamInput("");
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs sm:text-sm font-bold shadow-xs transition-all cursor-pointer"
+                >
+                  <YoutubeIcon className="h-4 w-4 fill-red-500" />
+                  <span>Live Stream (Standby)</span>
+                </button>
+              )}
               <Link
                 href={`/streams?tournamentId=${tournament.id}`}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900/90 hover:bg-slate-900 border border-slate-700 text-xs font-semibold text-white shadow-xs transition-all"
@@ -450,7 +595,7 @@ export default function TournamentDetailPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText(tournament.youtubeStreamUrl);
+                        navigator.clipboard.writeText(normalizeStreamUrl(tournament.youtubeStreamUrl));
                         setCopiedStream(true);
                         toast.success("Stream link copied to clipboard!", "Link Copied");
                         setTimeout(() => setCopiedStream(false), 2000);
@@ -462,7 +607,7 @@ export default function TournamentDetailPage() {
                       <span>{copiedStream ? "Copied" : "Copy"}</span>
                     </button>
                     <a
-                      href={tournament.youtubeStreamUrl}
+                      href={normalizeStreamUrl(tournament.youtubeStreamUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition-colors"
@@ -549,7 +694,7 @@ export default function TournamentDetailPage() {
                     <div className="min-w-0">
                       <span className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Organiser Stream Link</span>
                       <a
-                        href={tournament.youtubeStreamUrl}
+                        href={getYouTubeWatchUrl(tournament.youtubeStreamUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-mono text-xs text-slate-800 hover:text-red-600 truncate block transition-colors"
@@ -558,15 +703,29 @@ export default function TournamentDetailPage() {
                       </a>
                     </div>
                   </div>
-                  <a
-                    href={tournament.youtubeStreamUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shrink-0 shadow-xs transition-colors"
-                  >
-                    <span>Watch Stream ↗</span>
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(getYouTubeWatchUrl(tournament.youtubeStreamUrl));
+                        setCopiedStream(true);
+                        toast.info("Live stream link copied!", "Link Copied");
+                        setTimeout(() => setCopiedStream(false), 2000);
+                      }}
+                      className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      {copiedStream ? "Copied ✓" : "Copy Link"}
+                    </button>
+                    <a
+                      href={getYouTubeWatchUrl(tournament.youtubeStreamUrl)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shrink-0 shadow-xs transition-colors"
+                    >
+                      <span>Watch Stream ↗</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -755,6 +914,15 @@ export default function TournamentDetailPage() {
                 >
                   Enter Match Lobby →
                 </Link>
+
+                <button
+                  type="button"
+                  onClick={() => setShowJoinTokenModal(true)}
+                  className="w-full py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-100 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Key className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Join Another Squad via Token</span>
+                </button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -791,16 +959,16 @@ export default function TournamentDetailPage() {
                   className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-emerald-500 transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
                 >
                   <Sparkles className="h-4 w-4" />
-                  <span>Register &amp; Lock Slot</span>
+                  <span>Register Squad Roster</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setShowRegModal(true)}
-                  className="w-full py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  onClick={() => setShowJoinTokenModal(true)}
+                  className="w-full py-2.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-xs font-bold text-amber-900 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                 >
-                  <Key className="h-3.5 w-3.5 text-slate-500" />
-                  <span>Search Team / Invite with Token</span>
+                  <Key className="h-3.5 w-3.5 text-amber-600" />
+                  <span>Join via Squad Invitation Token</span>
                 </button>
               </div>
             )}
@@ -820,6 +988,18 @@ export default function TournamentDetailPage() {
         tournament={tournament}
         onRegistrationSuccess={(data) => {
           setRegistration(data);
+        }}
+      />
+
+      <JoinSquadTokenModal
+        isOpen={showJoinTokenModal}
+        onClose={() => setShowJoinTokenModal(false)}
+        tournamentId={tournament.id}
+        tournamentTitle={tournament.title}
+        game={tournament.game}
+        defaultToken={urlToken}
+        onSuccess={() => {
+          fetchRegistration();
         }}
       />
     </div>

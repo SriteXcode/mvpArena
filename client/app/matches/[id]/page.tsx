@@ -12,11 +12,14 @@ import {
   CheckCircle2,
   FileImage,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  ExternalLink,
+  Play
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useToast } from "@/lib/context/ToastContext";
 import ImageDropzone from "@/components/ImageDropzone";
+import { normalizeStreamUrl } from "@/lib/utils";
 
 export default function MatchLobbyPage() {
   const toast = useToast();
@@ -32,21 +35,58 @@ export default function MatchLobbyPage() {
   );
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [matchData, setMatchData] = useState({
+  const [matchData, setMatchData] = useState<{
+    roomId: string;
+    roomPassword: string;
+    status: string;
+    streamUrl?: string;
+    tournamentId?: string;
+    tournamentTitle?: string;
+  }>({
     roomId: "882910",
     roomPassword: "play99",
     status: "live",
+    streamUrl: "",
+    tournamentId: "",
+    tournamentTitle: "BGMI Pro Scrims Season 4",
   });
 
   useEffect(() => {
+    let localStream = "";
+    if (typeof window !== "undefined") {
+      try {
+        localStream = localStorage.getItem("mvp_stream_active") || "";
+      } catch {}
+    }
+
     fetch(`/api/matches/${matchId}`)
       .then((res) => res.json())
       .then((res) => {
         if (res.success && res.data) {
+          const t = res.data.tournament;
+          const tourneyId = t?._id || t?.id || "";
+          let tourneyStream = "";
+          if (typeof window !== "undefined" && tourneyId) {
+            try {
+              tourneyStream = localStorage.getItem(`mvp_stream_${tourneyId}`) || "";
+            } catch {}
+          }
+          const rawStream =
+            res.data.youtubeStreamUrl ||
+            res.data.streamUrl ||
+            t?.youtubeStreamUrl ||
+            t?.streamUrl ||
+            tourneyStream ||
+            localStream ||
+            "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1";
+
           setMatchData({
             roomId: res.data.roomId || "882910",
             roomPassword: res.data.roomPassword || "play99",
             status: res.data.status || "live",
+            streamUrl: normalizeStreamUrl(rawStream),
+            tournamentId: tourneyId,
+            tournamentTitle: t?.title || "BGMI Pro Scrims Season 4",
           });
         }
       })
@@ -124,6 +164,54 @@ export default function MatchLobbyPage() {
           <span>Lobby Closes: 18:00 IST</span>
         </div>
       </div>
+
+      {/* Official Live Match Broadcast Banner */}
+      {matchData.streamUrl && (
+        <div className="rounded-xl border border-red-200 bg-red-50/70 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-red-600/30">
+              <Play className="h-5 w-5 fill-white" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600"></span>
+                </span>
+                <span className="text-xs font-bold text-red-950 font-mono uppercase tracking-wider">
+                  Official Match Live Broadcast
+                </span>
+                <span className="text-[10px] font-mono font-bold bg-red-600 text-white px-1.5 py-0.5 rounded">
+                  LIVE
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5 truncate">
+                Organiser stream is active. Watch spectator feed, kill feeds, and caster commentary.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+            <a
+              href={normalizeStreamUrl(matchData.streamUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+            >
+              <span>Watch Live Stream</span>
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+            {matchData.tournamentId && (
+              <Link
+                href={`/tournaments/${matchData.tournamentId}`}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-2xs transition-colors"
+                title="View Full Tournament Fixture"
+              >
+                <span>Tournament</span>
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Room Access Credentials */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">

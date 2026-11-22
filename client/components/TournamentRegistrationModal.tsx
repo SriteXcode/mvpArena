@@ -41,7 +41,8 @@ export default function TournamentRegistrationModal({
   const toast = useToast();
   const [step, setStep] = useState<number>(1);
   const [teamName, setTeamName] = useState<string>("Team SoulFire");
-  const [searchGameId, setSearchGameId] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchType, setSearchType] = useState<"all" | "username" | "gameId">("all");
   const [searching, setSearching] = useState<boolean>(false);
   const [searchResult, setSearchResult] = useState<any>(null);
 
@@ -109,9 +110,9 @@ export default function TournamentRegistrationModal({
 
   if (!isOpen) return null;
 
-  // Search athlete by Game ID
+  // Search athlete by Username or Game ID
   const handleSearchTeammate = async () => {
-    if (!searchGameId.trim()) return;
+    if (!searchQuery.trim()) return;
     setSearching(true);
     setErrorMsg(null);
     setSearchResult(null);
@@ -121,7 +122,8 @@ export default function TournamentRegistrationModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          gameId: searchGameId.trim(),
+          query: searchQuery.trim(),
+          searchType,
           game: tournament.game,
         }),
       });
@@ -132,8 +134,8 @@ export default function TournamentRegistrationModal({
       setSearchResult({
         success: true,
         found: false,
-        searchGameId: searchGameId.trim(),
-        message: "No athlete registered with this Game ID on PlayArena yet. An invite link can be generated.",
+        searchQuery: searchQuery.trim(),
+        message: `No athlete registered with "${searchQuery.trim()}" on PlayArena yet. An invite link can be generated.`,
       });
     } finally {
       setSearching(false);
@@ -141,7 +143,7 @@ export default function TournamentRegistrationModal({
   };
 
   const handleAddFoundPlayer = (player: any) => {
-    if (invitedMembers.some((m) => m.gameId === player.gameId)) {
+    if (invitedMembers.some((m) => (player.id && (m.id === player.id || m.user === player.id)) || (player.gameId && m.gameId === player.gameId) || (m.username && m.username === player.username))) {
       toast.warning("This athlete is already in your team roster.", "Duplicate Member");
       setErrorMsg("This athlete is already in your team roster.");
       return;
@@ -157,49 +159,65 @@ export default function TournamentRegistrationModal({
       ...prev,
       {
         id: player.id,
+        user: player.id,
         name: player.name,
-        inGameName: player.inGameName,
-        gameId: player.gameId,
+        username: player.username,
+        inGameName: player.inGameName || "",
+        gameId: player.gameId || "",
+        hasGameProfile: Boolean(player.hasGameProfile),
         role: "member",
-        status: "confirmed",
+        status: "invited_pending",
         avatarUrl: player.avatarUrl,
         verified: player.verified,
       },
     ]);
 
-    toast.success(`Added ${player.inGameName} to squad roster!`, "Roster Updated");
+    toast.success(`Invited @${player.username} to squad roster!`, "Roster Updated");
     setSearchResult(null);
-    setSearchGameId("");
+    setSearchQuery("");
     setErrorMsg(null);
   };
 
-  const handleAddPendingTokenInvite = (gameId: string) => {
+  const handleAddPendingTokenInvite = (identifier: string) => {
     if (invitedMembers.length >= maxSlots) {
       toast.warning(`Roster limit reached (${maxSlots}/${maxSlots} slots).`, "Roster Full");
       setErrorMsg(`Roster limit reached (${maxSlots}/${maxSlots} slots).`);
       return;
     }
 
+    const cleanId = identifier.trim().replace(/^@/, "");
+    const isDigits = /^\d+$/.test(cleanId);
+
     setInvitedMembers((prev) => [
       ...prev,
       {
-        name: "Invited Teammate",
-        inGameName: `UID: ${gameId}`,
-        gameId: gameId,
+        id: `pending_${Date.now()}`,
+        name: isDigits ? `Friend (UID: ${cleanId})` : `@${cleanId}`,
+        username: !isDigits ? cleanId : undefined,
+        inGameName: "",
+        gameId: isDigits ? cleanId : "",
+        hasGameProfile: false,
         role: "member",
-        status: "invited_pending",
+        status: "waiting_for_login",
         verified: false,
+        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanId)}`,
       },
     ]);
 
-    toast.info(`Invited UID ${gameId}. Share squad token with them to join.`, "Teammate Invited");
+    toast.info(`Slot reserved for "${cleanId}". Share your squad invite link with them to log in & claim!`, "Slot Reserved");
     setSearchResult(null);
-    setSearchGameId("");
+    setSearchQuery("");
     setErrorMsg(null);
   };
 
-  const handleRemoveMember = (gameId: string) => {
-    setInvitedMembers((prev) => prev.filter((m) => m.gameId !== gameId || m.role === "captain"));
+  const handleRemoveMember = (identifier: string) => {
+    setInvitedMembers((prev) =>
+      prev.filter(
+        (m) =>
+          m.role === "captain" ||
+          (m.id !== identifier && m.gameId !== identifier && m.username !== identifier)
+      )
+    );
   };
 
   const universalInviteLink = typeof window !== "undefined"
@@ -211,6 +229,26 @@ export default function TournamentRegistrationModal({
     setCopiedLink(true);
     toast.info("Teammate invite URL copied to clipboard!", "Link Copied");
     setTimeout(() => setCopiedLink(false), 3000);
+  };
+
+  const handleCopyFriendInvite = (identifier?: string) => {
+    const link = `${universalInviteLink}${identifier ? `&friend=${encodeURIComponent(identifier)}` : ""}`;
+    navigator.clipboard.writeText(link);
+    setCopiedLink(true);
+    toast.success("Friend invite link copied to clipboard!", "Link Copied");
+    setTimeout(() => setCopiedLink(false), 3000);
+  };
+
+  const handleShareWhatsAppFriend = (identifier?: string) => {
+    const link = `${universalInviteLink}${identifier ? `&friend=${encodeURIComponent(identifier)}` : ""}`;
+    const text = encodeURIComponent(
+      `🎮 Join my squad "${teamName}" for ${tournament.title} on PlayArena!\n\n` +
+      `🏆 Prize Pool: ₹${tournament.prizePool.toLocaleString()}\n` +
+      `🔑 Squad Token: *${generatedToken}*\n` +
+      `⏳ Roster locks 10 mins before match start!\n\n` +
+      `Tap this link to log in and claim your slot:\n${link}`
+    );
+    window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
   };
 
   const handleShareWhatsApp = () => {
@@ -451,89 +489,169 @@ export default function TournamentRegistrationModal({
             <div className="space-y-6">
               <div>
                 <h4 className="text-sm font-bold text-slate-900">
-                  Search &amp; Invite Teammates by Game ID
+                  Search &amp; Invite Teammates by Username or Game ID
                 </h4>
                 <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                  Enter your teammate&apos;s BGMI Character UID or Free Fire ID. If they are not yet registered on PlayArena, you can generate an instant invite link and lock your slot early!
+                  Search your teammate by their PlayArena website @username or their in-game Character UID. If they are not registered yet, send them a direct invite link and reserve their slot while waiting for them to log in!
                 </p>
               </div>
 
-              {/* Search Box */}
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchGameId}
-                    onChange={(e) => setSearchGameId(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSearchTeammate()}
-                    placeholder="Enter teammate's Game ID (e.g. 5918237462)..."
-                    className="w-full rounded-xl border border-slate-200 pl-10 pr-4 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-emerald-500"
-                  />
+              {/* Search Mode Filter & Search Box */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-slate-500 mr-1">Search By:</span>
+                  <button
+                    type="button"
+                    onClick={() => setSearchType("all")}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                      searchType === "all"
+                        ? "bg-slate-900 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSearchType("username")}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                      searchType === "username"
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    @ Username
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSearchType("gameId")}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                      searchType === "gameId"
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Character UID
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSearchTeammate}
-                  disabled={searching || !searchGameId.trim()}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs font-mono transition-all shrink-0 cursor-pointer"
-                >
-                  {searching ? "Searching..." : "Search ID"}
-                </button>
+
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSearchTeammate()}
+                      placeholder={
+                        searchType === "username"
+                          ? "Enter PlayArena @username (e.g. @soul_mortal)..."
+                          : searchType === "gameId"
+                          ? "Enter teammate's Character UID (e.g. 5129847291)..."
+                          : "Search by @username or Character UID..."
+                      }
+                      className="w-full rounded-xl border border-slate-200 pl-10 pr-4 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSearchTeammate}
+                    disabled={searching || !searchQuery.trim()}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs font-mono transition-all shrink-0 cursor-pointer shadow-xs"
+                  >
+                    {searching ? "Searching..." : "Search"}
+                  </button>
+                </div>
               </div>
 
-              {/* Search Result Card */}
+              {/* Search Result Card (Strict Public Info Only) */}
               {searchResult && (
-                <div className="p-4 rounded-xl border transition-all animate-in fade-in">
+                <div className="rounded-xl transition-all animate-in fade-in">
                   {searchResult.found ? (
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/40">
+                      <div className="flex items-center gap-3 min-w-0">
                         <img
                           src={searchResult.user.avatarUrl}
                           alt={searchResult.user.name}
-                          className="h-10 w-10 rounded-full object-cover border border-slate-200"
+                          className="h-11 w-11 rounded-full object-cover border border-emerald-300 shrink-0"
                         />
-                        <div>
-                          <div className="flex items-center gap-1.5">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-sm font-bold text-slate-900">{searchResult.user.name}</span>
+                            <span className="text-xs font-mono font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">
+                              @{searchResult.user.username}
+                            </span>
                             {searchResult.user.verified && (
-                              <ShieldCheck className="h-4 w-4 text-cyan-600" />
+                              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-cyan-800 bg-cyan-50 border border-cyan-200 px-1.5 py-0.2 rounded-full font-bold">
+                                <ShieldCheck className="h-3 w-3 text-cyan-600" />
+                                Verified Athlete
+                              </span>
                             )}
                           </div>
-                          <span className="text-xs font-mono text-slate-500">
-                            IGN: <strong className="text-emerald-700">{searchResult.user.inGameName}</strong> (UID: {searchResult.user.gameId})
-                          </span>
+                          <div className="text-xs font-mono text-slate-600 mt-0.5">
+                            {searchResult.user.hasGameProfile ? (
+                              <>
+                                IGN: <strong className="text-slate-900">{searchResult.user.inGameName}</strong>
+                                {searchResult.user.gameId && (
+                                  <span className="text-slate-400 ml-1.5">(UID: {searchResult.user.gameId})</span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[11px] font-sans">
+                                Character UID not linked yet • Teammate will enter upon accepting
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       <button
                         type="button"
                         onClick={() => handleAddFoundPlayer(searchResult.user)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-emerald-600 text-white text-xs font-semibold transition-all cursor-pointer shadow-xs"
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-emerald-600 text-white text-xs font-bold transition-all cursor-pointer shadow-xs shrink-0"
                       >
                         <UserPlus className="h-3.5 w-3.5" />
-                        <span>Add to Roster</span>
+                        <span>Add &amp; Invite Teammate</span>
                       </button>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-2.5 text-xs text-amber-800">
-                        <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/70 space-y-3">
+                      <div className="flex items-start gap-2.5 text-xs text-amber-900">
+                        <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                         <div>
-                          <strong>UID &quot;{searchResult.searchGameId}&quot; is not registered on PlayArena yet.</strong>
-                          <p className="text-slate-600 mt-0.5">
-                            You can generate an invite link for this UID. When your friend signs up via the link, they will be automatically slotted into your squad.
+                          <strong className="text-sm font-bold text-amber-950 block">
+                            Athlete &quot;{searchResult.searchQuery}&quot; is not registered on PlayArena yet.
+                          </strong>
+                          <p className="text-slate-600 mt-1 leading-relaxed">
+                            Send an invite link to your friend! They can sign in or register to confirm their slot anytime before match kickoff. You can reserve this lineup slot right now while waiting for them to log in.
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex justify-end">
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-amber-200/60">
                         <button
                           type="button"
-                          onClick={() => handleAddPendingTokenInvite(searchResult.searchGameId)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all cursor-pointer"
+                          onClick={() => handleCopyFriendInvite(searchResult.searchQuery)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          <span>Copy Squad Invite Link</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleShareWhatsAppFriend(searchResult.searchQuery)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all cursor-pointer shadow-2xs"
                         >
                           <Share2 className="h-3.5 w-3.5" />
-                          <span>Reserve Token Slot for this UID</span>
+                          <span>Share on WhatsApp</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAddPendingTokenInvite(searchResult.searchQuery)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-amber-600 text-white text-xs font-bold transition-all cursor-pointer ml-auto shadow-xs"
+                        >
+                          <Clock className="h-3.5 w-3.5 text-amber-400" />
+                          <span>Reserve Slot (Waiting for Friend)</span>
                         </button>
                       </div>
                     </div>
@@ -559,50 +677,98 @@ export default function TournamentRegistrationModal({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {invitedMembers.map((member, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between gap-2 shadow-xs"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold font-mono text-xs ${
-                            member.role === "captain"
-                              ? "bg-slate-900 text-white"
-                              : "bg-emerald-100 text-emerald-800"
-                          }`}
-                        >
-                          {idx + 1}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs font-bold text-slate-900 truncate">
-                              {member.inGameName}
-                            </span>
-                            {member.role === "captain" && (
-                              <span className="text-[9px] font-mono px-1 rounded bg-slate-100 text-slate-600 font-bold uppercase">
-                                CPT
-                              </span>
-                            )}
+                  {invitedMembers.map((member, idx) => {
+                    const isPending = member.status === "invited_pending";
+                    const isWaiting = member.status === "waiting_for_login";
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-3 rounded-xl border flex items-center justify-between gap-2 shadow-xs transition-all ${
+                          isWaiting
+                            ? "bg-amber-50/70 border-amber-300"
+                            : isPending
+                            ? "bg-blue-50/70 border-blue-200"
+                            : "bg-white border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold font-mono text-xs shrink-0 ${
+                              member.role === "captain"
+                                ? "bg-slate-900 text-white"
+                                : isWaiting
+                                ? "bg-amber-500 text-white"
+                                : isPending
+                                ? "bg-blue-600 text-white"
+                                : "bg-emerald-100 text-emerald-800"
+                            }`}
+                          >
+                            {idx + 1}
                           </div>
-                          <span className="text-[11px] font-mono text-slate-400 block truncate">
-                            UID: {member.gameId}
-                          </span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-bold text-slate-900 truncate">
+                                {member.role === "captain"
+                                  ? (member.inGameName || member.name)
+                                  : (member.username ? `@${member.username}` : (member.inGameName || member.name))}
+                              </span>
+                              {member.role === "captain" && (
+                                <span className="text-[9px] font-mono px-1 rounded bg-slate-100 text-slate-600 font-bold uppercase">
+                                  CPT
+                                </span>
+                              )}
+                              {isPending && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-900 font-bold border border-blue-200">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-ping"></span>
+                                  Invite Sent
+                                </span>
+                              )}
+                              {isWaiting && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-200">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                                  Waiting for Login
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] font-mono text-slate-400 block truncate">
+                              {member.role === "captain"
+                                ? `UID: ${member.gameId}`
+                                : member.inGameName
+                                ? `IGN: ${member.inGameName} (UID: ${member.gameId})`
+                                : member.gameId
+                                ? `UID: ${member.gameId}`
+                                : isPending
+                                ? "Pending athlete acceptance"
+                                : "Slot reserved • Waiting for login"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {isWaiting && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyFriendInvite(member.gameId || member.username)}
+                              className="p-1 rounded text-slate-400 hover:text-emerald-600 transition-colors cursor-pointer"
+                              title="Copy Invite Link for this slot"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          {member.role !== "captain" && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMember(member.id || member.gameId || member.username)}
+                              className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer"
+                              title="Remove teammate"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
-
-                      {member.role !== "captain" && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveMember(member.gameId)}
-                          className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors"
-                          title="Remove teammate"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Empty Slot Placeholders */}
                   {Array.from({ length: maxSlots - invitedMembers.length }).map((_, i) => (

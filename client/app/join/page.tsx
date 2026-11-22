@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, Suspense } from "react";
+import React, { useState, Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { 
@@ -12,12 +12,16 @@ import {
   AlertCircle, 
   ArrowRight,
   Sparkles,
-  Clock
+  Clock,
+  LogIn,
+  UserPlus
 } from "lucide-react";
 
 import { useToast } from "@/lib/context/ToastContext";
+import { useAuth } from "@/lib/context/AuthContext";
 
 function JoinContent() {
+  const { user: authUser } = useAuth();
   const toast = useToast();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -25,6 +29,7 @@ function JoinContent() {
   const tokenParam = searchParams.get("token") || "";
   const tournamentIdParam = searchParams.get("tid") || "";
   const teamNameParam = searchParams.get("team") || "Squad Roster";
+  const friendParam = searchParams.get("friend") || "";
 
   const [tournament, setTournament] = useState<any>({
     id: tournamentIdParam,
@@ -37,9 +42,24 @@ function JoinContent() {
 
   const [token, setToken] = useState<string>(tokenParam);
   const [inGameName, setInGameName] = useState<string>("");
-  const [gameId, setGameId] = useState<string>("");
+  const [gameId, setGameId] = useState<string>(/^\d+$/.test(friendParam) ? friendParam : "");
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    if (authUser) {
+      const matchingProfile =
+        authUser.gameProfiles?.find((p: any) => p.game === tournament.game) ||
+        authUser.gameProfiles?.[0];
+
+      if (matchingProfile) {
+        if (!gameId) setGameId(matchingProfile.gameId || "");
+        if (!inGameName) setInGameName(matchingProfile.inGameName || authUser.name || "");
+      } else if (!inGameName) {
+        setInGameName(authUser.name || authUser.username || "");
+      }
+    }
+  }, [authUser, tournament.game]);
 
   React.useEffect(() => {
     if (tournamentIdParam) {
@@ -152,6 +172,49 @@ function JoinContent() {
             <strong>10-Minute Cutoff Policy:</strong> You can redeem this token and join your squad anytime until <strong>10 minutes before match kickoff</strong>. At that moment, the roster locks and Room Credentials unlock!
           </div>
         </div>
+
+        {/* Auth Guidance Notice */}
+        {authUser ? (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img
+                src={authUser.avatarUrl || "/avatar.png"}
+                alt={authUser.name}
+                className="h-8 w-8 rounded-full object-cover border border-emerald-300 shrink-0"
+              />
+              <div className="min-w-0">
+                <span className="font-bold text-slate-900 block truncate">{authUser.name}</span>
+                <span className="text-[11px] font-mono text-emerald-700">@{authUser.username} • Verified Account</span>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono font-bold bg-emerald-600 text-white px-2.5 py-0.5 rounded-full shrink-0">
+              Connected
+            </span>
+          </div>
+        ) : (
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div>
+              <span className="font-bold text-slate-900 block">Joining without a PlayArena account?</span>
+              <span className="text-[11px] text-slate-500">Sign in to auto-link your athlete profile, or enter your Character UID below.</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow-2xs"
+              >
+                <LogIn className="h-3.5 w-3.5" />
+                <span>Sign In</span>
+              </Link>
+              <Link
+                href="/register"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs shadow-2xs"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                <span>Register</span>
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Status Toast */}
         {statusMessage && (

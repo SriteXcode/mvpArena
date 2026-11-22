@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import User from "@/models/User";
 
-// Known mock players for testing search by Game ID
+// Known mock players for testing search by Username or Game ID
 const KNOWN_PLAYERS = [
   {
     id: "usr_jonathan",
@@ -50,41 +50,97 @@ export async function POST(
   try {
     await params; // resolve params promise
     const body = await req.json();
-    const { gameId, game } = body;
+    const { query, searchType = "all", gameId, username, game } = body;
 
-    if (!gameId || typeof gameId !== "string" || !gameId.trim()) {
+    const rawQuery = (query || username || gameId || "").trim();
+    if (!rawQuery) {
       return NextResponse.json(
-        { success: false, message: "Please enter a valid Game ID to search." },
+        { success: false, message: "Please enter a username or Game ID to search." },
         { status: 400 }
       );
     }
 
-    const cleanGameId = gameId.trim();
+    // Strip leading @ if user typed @username
+    const cleanQuery = rawQuery.replace(/^@/, "").trim();
+    const isPureDigits = /^\d+$/.test(cleanQuery);
 
-    // 1. Try querying MongoDB User collection
+    // Escape regex special characters to prevent regex crashes
+    const escapedQuery = cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    // 1. Try querying MongoDB User collection (with strict public projection)
     try {
       const conn = await connectToDatabase();
       if (conn) {
-        const dbUser = await User.findOne({
-          "gameProfiles.gameId": cleanGameId,
-        }).lean();
+        let dbQuery: Record<string, unknown> = {};
 
-        if (dbUser) {
-          const profile = dbUser.gameProfiles?.find(
-            (p: { gameId: string; game?: string }) => p.gameId === cleanGameId
-          );
+        if (searchType === "username") {
+          dbQuery = {
+            $or: [
+              { username: { $regex: escapedQuery, $options: "i" } },
+              { name: { $regex: escapedQuery, $options: "i" } },
+            ],
+          };
+        } else if (searchType === "gameId") {
+          dbQuery = {
+            $or: [
+              { "gameProfiles.gameId": cleanQuery },
+              { "gameProfiles.inGameName": { $regex: escapedQuery, $options: "i" } },
+            ],
+          };
+        } else {
+          // "all" - search username, name, gameId, or inGameName
+          dbQuery = {
+            $or: [
+              { username: { $regex: escapedQuery, $options: "i" } },
+              { name: { $regex: escapedQuery, $options: "i" } },
+              { "gameProfiles.gameId": cleanQuery },
+              { "gameProfiles.inGameName": { $regex: escapedQuery, $options: "i" } },
+            ],
+          };
+        }
+
+        // STRICT PUBLIC DATA PROJECTION: Never select email, phone, upi, wallet, password
+        const dbUsers = await User.find(dbQuery)
+          .select("name username avatarUrl bio gameProfiles role createdAt")
+          .limit(5)
+          .lean();
+
+        if (dbUsers && dbUsers.length > 0) {
+          // Pick exact match first, or first match
+          const exactUser =
+            dbUsers.find(
+              (u) =>
+                u.username.toLowerCase() === cleanQuery.toLowerCase() ||
+                u.gameProfiles?.some((p: any) => p.gameId === cleanQuery)
+            ) || dbUsers[0];
+
+          // Match profile for requested game
+          const matchingProfile =
+            exactUser.gameProfiles?.find(
+              (p: { gameId: string; game?: string; inGameName?: string }) =>
+                (game && p.game === game) ||
+                p.gameId === cleanQuery ||
+                p.inGameName?.toLowerCase() === cleanQuery.toLowerCase()
+            ) ||
+            exactUser.gameProfiles?.find((p: any) => !game || p.game === game) ||
+            null;
 
           return NextResponse.json({
             success: true,
             found: true,
             user: {
-              id: dbUser._id.toString(),
-              name: dbUser.name,
-              username: dbUser.username,
-              avatarUrl: dbUser.avatarUrl || "/avatar.png",
-              inGameName: profile?.inGameName || dbUser.name,
-              gameId: cleanGameId,
-              verified: profile?.verified ?? true,
+              id: exactUser._id.toString(),
+              name: exactUser.name,
+              username: exactUser.username,
+              avatarUrl: exactUser.avatarUrl || "/avatar.png",
+              bio: exactUser.bio || "",
+              // USERNAME IS INDEPENDENT: Never assign username or name to inGameName or gameId!
+              inGameName: matchingProfile?.inGameName || "",
+              gameId: matchingProfile?.gameId || "",
+              game: matchingProfile?.game || game || "bgmi",
+              hasGameProfile: Boolean(matchingProfile?.gameId),
+              verified: matchingProfile?.verified ?? false,
+              isRegistered: true,
             },
           });
         }
@@ -94,14 +150,24 @@ export async function POST(
     }
 
     // 2. Check in known mock player database
-    const matchedPlayer = KNOWN_PLAYERS.find((p) =>
-      p.gameProfiles.some((gp) => gp.gameId === cleanGameId)
-    );
+    const matchedPlayer = KNOWN_PLAYERS.find((p) => {
+      const matchUsername = p.username.toLowerCase().includes(cleanQuery.toLowerCase()) ||
+                            p.name.toLowerCase().includes(cleanQuery.toLowerCase());
+      const matchGameId = p.gameProfiles.some((gp) => gp.gameId === cleanQuery);
+      const matchIgn = p.gameProfiles.some(
+        (gp) => gp.inGameName.toLowerCase().includes(cleanQuery.toLowerCase())
+      );
+
+      if (searchType === "username") return matchUsername;
+      if (searchType === "gameId") return matchGameId || matchIgn;
+      return matchUsername || matchGameId || matchIgn;
+    });
 
     if (matchedPlayer) {
-      const matchedProfile = matchedPlayer.gameProfiles.find(
-        (gp) => gp.gameId === cleanGameId
-      );
+      const matchedProfile =
+        matchedPlayer.gameProfiles.find(
+          (gp) => (game && gp.game === game) || gp.gameId === cleanQuery
+        ) || matchedPlayer.gameProfiles[0];
 
       return NextResponse.json({
         success: true,
@@ -111,9 +177,12 @@ export async function POST(
           name: matchedPlayer.name,
           username: matchedPlayer.username,
           avatarUrl: matchedPlayer.avatarUrl,
-          inGameName: matchedProfile?.inGameName || matchedPlayer.name,
-          gameId: cleanGameId,
+          inGameName: matchedProfile?.inGameName || "",
+          gameId: matchedProfile?.gameId || "",
+          game: matchedProfile?.game || game || "bgmi",
+          hasGameProfile: Boolean(matchedProfile?.gameId),
           verified: matchedProfile?.verified ?? true,
+          isRegistered: true,
         },
       });
     }
@@ -122,8 +191,10 @@ export async function POST(
     return NextResponse.json({
       success: true,
       found: false,
-      searchGameId: cleanGameId,
-      message: "No athlete registered with this Game ID on PlayArena yet. An invite link can be generated.",
+      searchQuery: cleanQuery,
+      searchType,
+      isNumericId: isPureDigits,
+      message: `No athlete registered with "${cleanQuery}" on PlayArena yet. An invite link can be generated.`,
     });
   } catch (error) {
     console.error("Player search error:", error);

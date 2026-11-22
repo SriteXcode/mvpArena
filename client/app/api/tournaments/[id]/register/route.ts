@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import Tournament from "@/models/Tournament";
 import TournamentRegistration from "@/models/TournamentRegistration";
 import User from "@/models/User";
+import Notification from "@/models/Notification";
+import GameInvite from "@/models/GameInvite";
 import { getCurrentUser } from "@/lib/auth";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
@@ -39,10 +42,21 @@ export async function GET(
     try {
       const conn = await connectToDatabase();
       if (conn) {
-        const reg = await TournamentRegistration.findOne({
-          tournament: id,
-          captain: captainId,
-        }).lean();
+        const queryConditions: any[] = [];
+        if (captainId && !captainId.startsWith("usr_")) {
+          queryConditions.push({ captain: captainId }, { "members.user": captainId });
+        }
+        if (currentUser?.username) {
+          queryConditions.push({ "members.username": currentUser.username });
+        }
+
+        let reg = null;
+        if (queryConditions.length > 0) {
+          reg = await TournamentRegistration.findOne({
+            tournament: id,
+            $or: queryConditions,
+          }).populate("captain", "name username avatarUrl").lean();
+        }
 
         if (reg) {
           return NextResponse.json({
@@ -106,8 +120,10 @@ export async function POST(
     const rosterLockedAt = new Date(matchDate.getTime() - 10 * 60 * 1000);
 
     // Initial squad roster: Captain is slot 1
-    const members = [
+    const members: any[] = [
       {
+        user: captainId && mongoose.Types.ObjectId.isValid(captainId) ? captainId : undefined,
+        username: currentUser?.username || undefined,
         gameId: captainGameId || "5129847291",
         inGameName: captainInGameName || captainName,
         role: "captain",
@@ -119,9 +135,12 @@ export async function POST(
     // Append invited teammates
     if (Array.isArray(invitedMembers)) {
       invitedMembers.slice(0, maxMembers - 1).forEach((im: any) => {
+        const memberUserId = im.user || (im.id && mongoose.Types.ObjectId.isValid(im.id) ? im.id : undefined);
         members.push({
-          gameId: im.gameId,
-          inGameName: im.inGameName || "Teammate",
+          user: memberUserId,
+          username: im.username || undefined,
+          gameId: im.gameId || "",
+          inGameName: im.inGameName || "",
           role: "member",
           status: im.status || "invited_pending",
           joinedAt: new Date().toISOString(),
@@ -163,17 +182,19 @@ export async function POST(
     try {
       const conn = await connectToDatabase();
       if (conn) {
-        await TournamentRegistration.create({
+        const createdReg = await TournamentRegistration.create({
           tournament: id,
           teamName: teamName.trim(),
           format,
-          captain: captainId,
+          captain: captainId && mongoose.Types.ObjectId.isValid(captainId) ? captainId : undefined,
           squadToken,
           members: members.map((m) => ({
+            user: m.user && mongoose.Types.ObjectId.isValid(m.user) ? m.user : undefined,
+            username: m.username,
             gameId: m.gameId,
             inGameName: m.inGameName,
             role: (m.role || "member") as "captain" | "member" | "substitute",
-            status: (m.status || "confirmed") as "confirmed" | "invited_pending",
+            status: (m.status || "confirmed") as "confirmed" | "invited_pending" | "waiting_for_login" | "declined",
             joinedAt: new Date(m.joinedAt),
           })),
           maxMembers,
@@ -192,6 +213,54 @@ export async function POST(
         await Tournament.findByIdAndUpdate(id, {
           $inc: { registeredSlots: 1 },
         });
+
+        const tournamentDoc = await Tournament.findById(id);
+
+        // Dispatch notifications & game invites for invited teammates
+        for (const m of members) {
+          if (m.role === "captain") continue;
+
+          let targetUserId = m.user;
+          let targetUser = null;
+
+          if (targetUserId && mongoose.Types.ObjectId.isValid(targetUserId)) {
+            targetUser = await User.findById(targetUserId);
+          } else if (m.username) {
+            targetUser = await User.findOne({
+              username: { $regex: `^${m.username.replace(/^@/, "")}$`, $options: "i" },
+            });
+            if (targetUser) {
+              targetUserId = targetUser._id;
+            }
+          }
+
+          if (targetUser && targetUserId) {
+            try {
+              // Create in-app Notification for the teammate
+              await Notification.create({
+                recipient: targetUserId,
+                title: `Squad Invitation: ${teamName.trim()}`,
+                message: `${captainName} invited you to join squad "${teamName.trim()}" for ${tournamentDoc?.title || "Tournament"}! Respond to confirm or decline your slot.`,
+                type: "game_invite",
+                link: `/tournaments/${id}`,
+              });
+
+              // Create GameInvite record
+              await GameInvite.create({
+                sender: captainId && mongoose.Types.ObjectId.isValid(captainId) ? captainId : targetUserId,
+                receiver: targetUserId,
+                targetGameId: m.gameId || targetUser.gameProfiles?.[0]?.gameId || "N/A",
+                game: tournamentDoc?.game || "bgmi",
+                tournament: id,
+                teamName: teamName.trim(),
+                message: `${captainName} invited you to join squad "${teamName.trim()}"!`,
+                status: "pending",
+              });
+            } catch (notifyErr) {
+              console.warn("Failed to dispatch invite notification for member:", notifyErr);
+            }
+          }
+        }
 
         // Dispatch WhatsApp tournament confirmation message
         try {

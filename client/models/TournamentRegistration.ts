@@ -2,10 +2,11 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface ISquadMember {
   user?: mongoose.Types.ObjectId;
-  gameId: string; // IGN or Character UID
-  inGameName: string;
+  username?: string;
+  gameId?: string; // IGN or Character UID
+  inGameName?: string;
   role: "captain" | "member" | "substitute";
-  status: "confirmed" | "invited_pending";
+  status: "confirmed" | "invited_pending" | "waiting_for_login" | "declined";
   joinedAt: Date;
 }
 
@@ -33,10 +34,11 @@ export interface ITournamentRegistration extends Document {
 
 const SquadMemberSchema = new Schema<ISquadMember>({
   user: { type: Schema.Types.ObjectId, ref: "User" },
-  gameId: { type: String, required: true },
+  username: { type: String, default: "" },
+  gameId: { type: String, default: "" },
   inGameName: { type: String, default: "Player" },
   role: { type: String, enum: ["captain", "member", "substitute"], default: "member" },
-  status: { type: String, enum: ["confirmed", "invited_pending"], default: "confirmed" },
+  status: { type: String, enum: ["confirmed", "invited_pending", "waiting_for_login", "declined"], default: "confirmed" },
   joinedAt: { type: Date, default: Date.now },
 });
 

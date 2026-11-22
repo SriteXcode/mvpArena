@@ -18,11 +18,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { gameId, inGameName, role } = body;
+    const { gameId, inGameName, role, username, status } = body;
 
-    if (!gameId) {
+    if (!gameId && !username) {
       return NextResponse.json(
-        { success: false, error: "10-digit Character UID is required." },
+        { success: false, error: "Character UID or PlayArena username is required." },
         { status: 400 }
       );
     }
@@ -42,9 +42,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Attempt to resolve registered user by Username or Game UID
+    let candidateUser = null;
+    if (username) {
+      candidateUser = await User.findOne({
+        username: { $regex: `^${username.trim().replace(/^@/, "")}$`, $options: "i" },
+      });
+    }
+    if (!candidateUser && gameId) {
+      candidateUser = await User.findOne({
+        "gameProfiles.gameId": gameId.trim(),
+      });
+    }
+
+    const resolvedGameId =
+      gameId?.trim() ||
+      candidateUser?.gameProfiles?.find((p: { game?: string; gameId: string }) => p.game === team.game)?.gameId ||
+      candidateUser?.gameProfiles?.[0]?.gameId ||
+      (username ? `PENDING_${username.trim().replace(/^@/, "")}` : `PENDING_${Date.now().toString().slice(-6)}`);
+
     // Check if player UID is already on the roster
     const alreadyMember = team.members.find(
-      (m: { gameId: string }) => m.gameId.toLowerCase() === gameId.trim().toLowerCase()
+      (m: { gameId: string; user?: any }) =>
+        m.gameId.toLowerCase() === resolvedGameId.toLowerCase() ||
+        (candidateUser && m.user && m.user.toString() === candidateUser._id.toString())
     );
     if (alreadyMember) {
       return NextResponse.json(
@@ -53,23 +74,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Attempt to resolve registered user by Game UID
-    const candidateUser = await User.findOne({
-      "gameProfiles.gameId": gameId.trim(),
-    });
-
     const candidateIgn =
       inGameName?.trim() ||
-      candidateUser?.gameProfiles?.find((p: { gameId: string; inGameName?: string }) => p.gameId === gameId.trim())?.inGameName ||
+      candidateUser?.gameProfiles?.find((p: { gameId: string; inGameName?: string }) => p.gameId === resolvedGameId)?.inGameName ||
       candidateUser?.name ||
-      `Athlete_${gameId.slice(-4)}`;
+      (username ? `@${username.trim().replace(/^@/, "")}` : `Athlete_${resolvedGameId.slice(-4)}`);
+
+    const memberStatus = status === "waiting_for_login" ? "waiting_for_login" : "active";
 
     team.members.push({
       user: candidateUser?._id,
-      gameId: gameId.trim(),
+      gameId: resolvedGameId,
       inGameName: candidateIgn,
       role: role || "assaulter",
-      status: "active", // Direct roster inclusion for scrims readiness
+      status: memberStatus,
       joinedAt: new Date(),
     });
 

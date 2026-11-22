@@ -11,12 +11,19 @@ export async function GET() {
       return NextResponse.json({ success: true, data: [] });
     }
 
+    const queryConditions: any[] = [
+      { user: auth.userId },
+      { captain: auth.userId },
+      { "members": { $elemMatch: { user: auth.userId, status: "confirmed" } } },
+    ];
+    if (auth.username) {
+      queryConditions.push({
+        "members": { $elemMatch: { username: auth.username, status: "confirmed" } },
+      });
+    }
+
     const registrations = await TournamentRegistration.find({
-      $or: [
-        { user: auth.userId },
-        { captain: auth.userId },
-        { "members.user": auth.userId },
-      ],
+      $or: queryConditions,
     })
       .populate("tournament", "title game format prizePool bannerUrl tournamentDate status matchRoomCredentials")
       .sort({ createdAt: -1 })

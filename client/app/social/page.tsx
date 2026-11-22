@@ -16,7 +16,12 @@ import {
   Trash2, 
   Edit3,
   Sparkles,
-  Inbox
+  Inbox,
+  Search,
+  Share2,
+  Copy,
+  Clock,
+  AlertCircle
 } from "lucide-react";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useToast } from "@/lib/context/ToastContext";
@@ -37,10 +42,16 @@ export default function SquadRostersPage() {
   const [creatingSquad, setCreatingSquad] = useState(false);
 
   // Recruit Teammate Form State
+  const [recruitQuery, setRecruitQuery] = useState("");
+  const [recruitSearchType, setRecruitSearchType] = useState<"all" | "username" | "gameId">("all");
+  const [recruitSearching, setRecruitSearching] = useState(false);
+  const [recruitSearchResult, setRecruitSearchResult] = useState<any>(null);
   const [candidateGameId, setCandidateGameId] = useState("");
+  const [candidateUsername, setCandidateUsername] = useState("");
   const [candidateIgn, setCandidateIgn] = useState("");
   const [candidateRole, setCandidateRole] = useState<"assaulter" | "sniper" | "support" | "substitute">("assaulter");
   const [recruiting, setRecruiting] = useState(false);
+  const [copiedSquadLink, setCopiedSquadLink] = useState(false);
 
   // Directory of Teams
   const [allTeams, setAllTeams] = useState<any[]>([]);
@@ -117,11 +128,103 @@ export default function SquadRostersPage() {
     }
   };
 
+  const handleSearchTeammateSocial = async () => {
+    if (!recruitQuery.trim()) return;
+    setRecruitSearching(true);
+    setRecruitSearchResult(null);
+
+    try {
+      const res = await fetch("/api/teams/search-player", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: recruitQuery.trim(),
+          searchType: recruitSearchType,
+          game: myTeam?.game || "bgmi",
+        }),
+      });
+      const data = await res.json();
+      setRecruitSearchResult(data);
+      if (data.found && data.user) {
+        setCandidateGameId(data.user.gameId !== "N/A" ? data.user.gameId : "");
+        setCandidateUsername(data.user.username || "");
+        setCandidateIgn(data.user.inGameName || "");
+      }
+    } catch {
+      setRecruitSearchResult({
+        success: true,
+        found: false,
+        searchQuery: recruitQuery.trim(),
+        message: `Athlete "${recruitQuery.trim()}" not registered on PlayArena yet.`,
+      });
+    } finally {
+      setRecruitSearching(false);
+    }
+  };
+
+  const squadInviteUrl = typeof window !== "undefined" && myTeam
+    ? `${window.location.origin}/join?token=${encodeURIComponent(myTeam.tag)}&team=${encodeURIComponent(myTeam.name)}`
+    : `https://playarena.gg/join?token=${myTeam?.tag || "SQUAD"}`;
+
+  const handleCopySquadInviteUrl = (friendIdentifier?: string) => {
+    const url = `${squadInviteUrl}${friendIdentifier ? `&friend=${encodeURIComponent(friendIdentifier)}` : ""}`;
+    navigator.clipboard.writeText(url);
+    setCopiedSquadLink(true);
+    toast.success("Squad recruitment invite URL copied to clipboard!", "Link Copied");
+    setTimeout(() => setCopiedSquadLink(false), 3000);
+  };
+
+  const handleShareWhatsAppSquad = (friendIdentifier?: string) => {
+    const url = `${squadInviteUrl}${friendIdentifier ? `&friend=${encodeURIComponent(friendIdentifier)}` : ""}`;
+    const text = encodeURIComponent(
+      `🎮 You've been recruited to join esports squad "${myTeam?.name}" [${myTeam?.tag}] on PlayArena!\n\n` +
+      `🏆 Game: ${myTeam?.game?.toUpperCase() || "BGMI"}\n` +
+      `🔑 Squad Tag: *${myTeam?.tag}*\n\n` +
+      `Claim your squad slot here:\n${url}`
+    );
+    window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
+  };
+
+  const handleReserveWaitingSlot = async (identifier: string) => {
+    if (!myTeam) return;
+    setRecruiting(true);
+    const isDigits = /^\d+$/.test(identifier.trim().replace(/^@/, ""));
+    const cleanId = identifier.trim().replace(/^@/, "");
+
+    try {
+      const res = await fetch("/api/teams/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gameId: isDigits ? cleanId : `PENDING_${cleanId}`,
+          username: !isDigits ? cleanId : undefined,
+          inGameName: isDigits ? `UID: ${cleanId}` : `@${cleanId}`,
+          role: candidateRole,
+          status: "waiting_for_login",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.info(`Slot reserved for "${identifier}". Share your squad link so they can log in & join!`, "Slot Reserved");
+        setMyTeam(data.data);
+        setRecruitQuery("");
+        setRecruitSearchResult(null);
+        setActiveTab("squad");
+      } else {
+        toast.error(data.error || "Could not reserve slot.", "Action Failed");
+      }
+    } catch {
+      toast.error("Network error reserving slot.", "Error");
+    } finally {
+      setRecruiting(false);
+    }
+  };
+
   // Handle Recruit Teammate
   const handleRecruitTeammate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!candidateGameId.trim()) {
-      toast.warning("Please enter candidate's 10-digit Character UID.", "Missing UID");
+    if (!candidateGameId.trim() && !candidateUsername.trim() && !recruitQuery.trim()) {
+      toast.warning("Please provide candidate's @username or Character UID.", "Missing Identifier");
       return;
     }
 
@@ -132,8 +235,10 @@ export default function SquadRostersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           gameId: candidateGameId.trim(),
+          username: candidateUsername.trim() || (!candidateGameId.trim() ? recruitQuery.trim().replace(/^@/, "") : undefined),
           inGameName: candidateIgn.trim(),
           role: candidateRole,
+          status: "active",
         }),
       });
       const data = await res.json();
@@ -141,7 +246,10 @@ export default function SquadRostersPage() {
         toast.success(data.message, "Roster Updated!");
         setMyTeam(data.data);
         setCandidateGameId("");
+        setCandidateUsername("");
         setCandidateIgn("");
+        setRecruitQuery("");
+        setRecruitSearchResult(null);
         setActiveTab("squad");
       } else {
         toast.error(data.error || "Could not recruit athlete.", "Recruitment Error");
@@ -233,7 +341,7 @@ export default function SquadRostersPage() {
           }`}
         >
           <UserPlus className="h-3.5 w-3.5 text-sky-600" />
-          <span>Recruit Athlete by UID</span>
+          <span>Recruit Teammate (Username / UID)</span>
         </button>
 
         <button
@@ -304,40 +412,70 @@ export default function SquadRostersPage() {
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {myTeam.members?.map((m: { gameId: string; inGameName: string; role: string }, idx: number) => (
-                    <div
-                      key={m.gameId || idx}
-                      className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="relative h-10 w-10 rounded-lg overflow-hidden border border-slate-300 bg-white flex items-center justify-center font-mono font-bold text-slate-700 text-xs">
-                          {idx + 1}
+                  {myTeam.members?.map((m: { gameId: string; inGameName: string; role: string; status?: string }, idx: number) => {
+                    const isWaiting = m.status === "waiting_for_login" || m.status === "invited_pending";
+                    return (
+                      <div
+                        key={m.gameId || idx}
+                        className={`flex items-center justify-between p-3.5 rounded-xl border transition-colors ${
+                          isWaiting
+                            ? "border-amber-200 bg-amber-50/50"
+                            : "border-slate-200 bg-slate-50/60 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`relative h-10 w-10 rounded-lg overflow-hidden border flex items-center justify-center font-mono font-bold text-xs shrink-0 ${
+                              isWaiting
+                                ? "border-amber-300 bg-amber-100 text-amber-900"
+                                : "border-slate-300 bg-white text-slate-700"
+                            }`}
+                          >
+                            {idx + 1}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-slate-900 truncate">{m.inGameName}</span>
+                              <span className={`text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border font-bold ${getRoleBadge(m.role)}`}>
+                                {m.role}
+                              </span>
+                              {isWaiting && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                                  Waiting for Login
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded inline-block mt-0.5 border border-emerald-200 truncate">
+                              {isWaiting ? "Slot Reserved • Pending Signup" : `UID: ${m.gameId}`}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-900">{m.inGameName}</span>
-                            <span className={`text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border font-bold ${getRoleBadge(m.role)}`}>
-                              {m.role}
-                            </span>
-                          </div>
-                          <div className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded inline-block mt-0.5 border border-emerald-200">
-                            UID: <span className="font-bold">{m.gameId}</span>
-                          </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {isWaiting && (
+                            <button
+                              onClick={() => handleCopySquadInviteUrl(m.gameId)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                              title="Copy Invite Link"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          {/* Remove button if not captain */}
+                          {m.role !== "captain" && (
+                            <button
+                              onClick={() => handleRemoveMember(m.gameId)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Remove from squad"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
-
-                      {/* Remove button if not captain */}
-                      {m.role !== "captain" && (
-                        <button
-                          onClick={() => handleRemoveMember(m.gameId)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                          title="Remove from squad"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -440,7 +578,7 @@ export default function SquadRostersPage() {
         </div>
       )}
 
-      {/* ================= TAB 2: RECRUIT ATHLETE BY UID ================= */}
+      {/* ================= TAB 2: RECRUIT ATHLETE BY USERNAME OR UID ================= */}
       {activeTab === "recruit" && (
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-5 max-w-xl mx-auto">
           <div className="text-center space-y-1">
@@ -449,7 +587,7 @@ export default function SquadRostersPage() {
             </div>
             <h3 className="text-base font-bold text-slate-900 font-mono">Recruit Teammate to Lineup</h3>
             <p className="text-xs text-slate-600">
-              Enter candidate athlete&apos;s 10-digit character identifier and assign their tactical role.
+              Search candidate athlete by their PlayArena website @username or Character UID and assign their tactical role.
             </p>
           </div>
 
@@ -458,66 +596,240 @@ export default function SquadRostersPage() {
               Please establish your squad first under &quot;My Active Squad&quot; before adding teammates.
             </div>
           ) : (
-            <form onSubmit={handleRecruitTeammate} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Athlete 10-Digit Character UID
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 5129847291"
-                  value={candidateGameId}
-                  onChange={(e) => setCandidateGameId(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-600 shadow-xs"
-                />
+            <div className="space-y-4">
+              {/* Search By Filter Pills */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-slate-500 mr-1">Search By:</span>
+                  <button
+                    type="button"
+                    onClick={() => setRecruitSearchType("all")}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                      recruitSearchType === "all"
+                        ? "bg-slate-900 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecruitSearchType("username")}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                      recruitSearchType === "username"
+                        ? "bg-sky-600 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    @ Username
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecruitSearchType("gameId")}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                      recruitSearchType === "gameId"
+                        ? "bg-sky-600 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Character UID
+                  </button>
+                </div>
+
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={recruitQuery}
+                      onChange={(e) => setRecruitQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSearchTeammateSocial()}
+                      placeholder={
+                        recruitSearchType === "username"
+                          ? "Enter PlayArena @username (e.g. @soul_mortal)..."
+                          : recruitSearchType === "gameId"
+                          ? "Enter 10-digit Character UID (e.g. 5129847291)..."
+                          : "Search by @username or Character UID..."
+                      }
+                      className="w-full rounded-xl border border-slate-200 pl-10 pr-4 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSearchTeammateSocial}
+                    disabled={recruitSearching || !recruitQuery.trim()}
+                    className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold text-xs font-mono transition-all shrink-0 cursor-pointer shadow-xs"
+                  >
+                    {recruitSearching ? "Searching..." : "Search"}
+                  </button>
+                </div>
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  In-Game Name (IGN) <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Soul_Viper"
-                  value={candidateIgn}
-                  onChange={(e) => setCandidateIgn(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-600 shadow-xs"
-                />
-              </div>
+              {/* Search Result Card */}
+              {recruitSearchResult && (
+                <div className="rounded-xl transition-all animate-in fade-in">
+                  {recruitSearchResult.found ? (
+                    <div className="p-4 rounded-xl border border-sky-200 bg-sky-50/40 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={recruitSearchResult.user.avatarUrl}
+                          alt={recruitSearchResult.user.name}
+                          className="h-11 w-11 rounded-full object-cover border border-sky-300 shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-sm font-bold text-slate-900">{recruitSearchResult.user.name}</span>
+                            <span className="text-xs font-mono font-semibold text-sky-700 bg-sky-100 px-1.5 py-0.2 rounded">
+                              @{recruitSearchResult.user.username}
+                            </span>
+                            {recruitSearchResult.user.verified && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-cyan-800 bg-cyan-50 border border-cyan-200 px-1.5 py-0.2 rounded-full font-bold">
+                                <ShieldCheck className="h-3 w-3 text-cyan-600" />
+                                Verified
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs font-mono text-slate-600 mt-0.5">
+                            IGN: <strong className="text-slate-900">{recruitSearchResult.user.inGameName}</strong>
+                            {recruitSearchResult.user.gameId !== "N/A" && (
+                              <span className="text-slate-400 ml-1.5">(UID: {recruitSearchResult.user.gameId})</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Tactical Roster Role</label>
-                <select
-                  value={candidateRole}
-                  onChange={(e) => setCandidateRole(e.target.value as any)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:outline-none focus:border-sky-600 shadow-xs"
-                >
-                  <option value="assaulter">Assaulter (Entry Fragger)</option>
-                  <option value="sniper">Sniper / Marksman</option>
-                  <option value="support">Support / Tactician</option>
-                  <option value="substitute">Substitute Athlete</option>
-                </select>
-              </div>
+                      <div className="pt-2 border-t border-sky-200/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-semibold text-slate-700 shrink-0">Tactical Role:</label>
+                          <select
+                            value={candidateRole}
+                            onChange={(e) => setCandidateRole(e.target.value as any)}
+                            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-900 focus:outline-none focus:border-sky-600 shadow-2xs"
+                          >
+                            <option value="assaulter">Assaulter (Entry Fragger)</option>
+                            <option value="sniper">Sniper / Marksman</option>
+                            <option value="support">Support / Tactician</option>
+                            <option value="substitute">Substitute Athlete</option>
+                          </select>
+                        </div>
 
-              <button
-                type="submit"
-                disabled={recruiting}
-                className="w-full py-2.5 rounded-lg bg-sky-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-sky-500 transition-all shadow-md shadow-sky-600/20 flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                {recruiting ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <span>Confirming Athlete...</span>
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-3.5 w-3.5" />
-                    <span>Confirm Athlete to Lineup</span>
-                  </>
-                )}
-              </button>
-            </form>
+                        <button
+                          type="button"
+                          onClick={(e) => handleRecruitTeammate(e)}
+                          disabled={recruiting}
+                          className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                        >
+                          {recruiting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+                          <span>Recruit to Lineup</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/70 space-y-3">
+                      <div className="flex items-start gap-2.5 text-xs text-amber-900">
+                        <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="text-sm font-bold text-amber-950 block">
+                            Athlete &quot;{recruitSearchResult.searchQuery}&quot; is not registered on PlayArena yet.
+                          </strong>
+                          <p className="text-slate-600 mt-1 leading-relaxed">
+                            Send a squad invite link to your friend! You can reserve their lineup slot right now while waiting for them to sign up &amp; log in.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-amber-200/60">
+                        <button
+                          type="button"
+                          onClick={() => handleCopySquadInviteUrl(recruitSearchResult.searchQuery)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          <span>Copy Squad Invite Link</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleShareWhatsAppSquad(recruitSearchResult.searchQuery)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+                        >
+                          <Share2 className="h-3.5 w-3.5" />
+                          <span>Share on WhatsApp</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleReserveWaitingSlot(recruitSearchResult.searchQuery)}
+                          disabled={recruiting}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-amber-600 text-white text-xs font-bold transition-all cursor-pointer ml-auto shadow-xs disabled:opacity-50"
+                        >
+                          <Clock className="h-3.5 w-3.5 text-amber-400" />
+                          <span>Reserve Slot (Waiting for Friend)</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Direct Character UID Fallback form */}
+              <div className="pt-3 border-t border-slate-100">
+                <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block mb-2">
+                  Or Direct Character UID Entry
+                </span>
+                <form onSubmit={handleRecruitTeammate} className="space-y-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Character UID
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 5129847291"
+                        value={candidateGameId}
+                        onChange={(e) => setCandidateGameId(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-600 shadow-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        In-Game Name (IGN) <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Soul_Viper"
+                        value={candidateIgn}
+                        onChange={(e) => setCandidateIgn(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-600 shadow-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+                    <div className="flex items-center gap-2">
+                      <label className="font-semibold text-slate-700 shrink-0">Tactical Role:</label>
+                      <select
+                        value={candidateRole}
+                        onChange={(e) => setCandidateRole(e.target.value as any)}
+                        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-slate-900 focus:outline-none focus:border-sky-600 shadow-xs"
+                      >
+                        <option value="assaulter">Assaulter (Entry Fragger)</option>
+                        <option value="sniper">Sniper / Marksman</option>
+                        <option value="support">Support / Tactician</option>
+                        <option value="substitute">Substitute Athlete</option>
+                      </select>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={recruiting || (!candidateGameId.trim() && !candidateUsername.trim() && !recruitQuery.trim())}
+                      className="py-2 px-4 rounded-lg bg-sky-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-sky-500 transition-all shadow-md shadow-sky-600/20 flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {recruiting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+                      <span>Confirm Athlete</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
           )}
         </div>
       )}
