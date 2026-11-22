@@ -254,7 +254,7 @@ export default function AchievementsHub({ userStats }: AchievementsHubProps) {
           return (
             <div
               key={item.id}
-              className={`p-4 sm:p-5 rounded-2xl border transition-all ${
+              className={`p-4 sm:p-5 rounded-2xl border transition-all max-w-full overflow-hidden ${
                 item.isClaimed
                   ? "bg-slate-50/80 border-slate-200 opacity-80"
                   : item.isUnlocked
@@ -262,8 +262,8 @@ export default function AchievementsHub({ userStats }: AchievementsHubProps) {
                   : "bg-white border-slate-200"
               }`}
             >
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-3">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div
                     className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
                       item.isClaimed
@@ -279,26 +279,26 @@ export default function AchievementsHub({ userStats }: AchievementsHubProps) {
                       <Lock className="h-4 w-4" />
                     )}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-slate-900">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-sm font-bold text-slate-900 break-words">
                         {item.title}
                       </h4>
-                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold shrink-0">
                         {item.category}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed break-words">
                       {item.description}
                     </p>
                   </div>
                 </div>
 
                 {/* Reward Tag */}
-                <div className="shrink-0 text-right">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-amber-50 text-amber-900 border border-amber-200">
-                    <Sparkles className="h-3 w-3 text-amber-600" />
-                    <span>{item.rewardFormatted}</span>
+                <div className="self-start sm:self-auto sm:shrink-0 sm:text-right max-w-full">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-amber-50 text-amber-900 border border-amber-200 max-w-full">
+                    <Sparkles className="h-3 w-3 text-amber-600 shrink-0" />
+                    <span className="break-words">{item.rewardFormatted}</span>
                   </span>
                 </div>
               </div>
@@ -322,7 +322,7 @@ export default function AchievementsHub({ userStats }: AchievementsHubProps) {
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+              <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-[11px] font-mono text-slate-400">
                   {item.isClaimed
                     ? "Reward successfully transferred"

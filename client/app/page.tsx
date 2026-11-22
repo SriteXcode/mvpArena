@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, Suspense } from "react";
+import React, { useState, useEffect, useMemo, Suspense, useRef } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { 
@@ -13,7 +13,9 @@ import {
   SlidersHorizontal,
   X,
   Search,
-  Check
+  Check,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import TournamentCard from "@/components/TournamentCard";
 import HeroBanner from "@/components/HeroBanner";
@@ -147,6 +149,16 @@ export default function HomePage() {
   const [leaderboards, setLeaderboards] = useState<MockLeaderboardTeam[]>([]);
   const [isLoadingTournaments, setIsLoadingTournaments] = useState(true);
   const [isLoadingLeaderboards, setIsLoadingLeaderboards] = useState(true);
+
+  const tournamentScrollRef = useRef<HTMLDivElement>(null);
+  const scrollTournaments = (dir: "left" | "right") => {
+    if (tournamentScrollRef.current) {
+      tournamentScrollRef.current.scrollBy({
+        left: dir === "left" ? -340 : 340,
+        behavior: "smooth",
+      });
+    }
+  };
 
   useEffect(() => {
     fetch("/api/tournaments")
@@ -309,22 +321,33 @@ export default function HomePage() {
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full">
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-5">
-          <div>
-            <div className="flex items-center gap-1.5 text-[11px] font-mono uppercase text-emerald-600 font-bold tracking-wider mb-1">
-              <Flame className="h-3.5 w-3.5" />
-              <span>Active Competitions</span>
+          <div className="flex items-center justify-between w-full md:w-auto">
+            <div>
+              <div className="flex items-center gap-1.5 text-[11px] font-mono uppercase text-emerald-600 font-bold tracking-wider mb-1">
+                <Flame className="h-3.5 w-3.5" />
+                <span>Active Competitions</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+                Featured Tournaments
+              </h2>
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Featured Tournaments
-            </h2>
+
+            {/* Mobile View All Button parallel on the right of Featured Tournaments */}
+            <Link
+              href="/tournaments"
+              className="md:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold transition-all shadow-xs shrink-0"
+            >
+              <span>View All</span>
+              <ArrowRight className="h-3.5 w-3.5 text-emerald-600" />
+            </Link>
           </div>
 
-          {/* Header Controls: Primary Game Filter Pills + Compact Toggle Icon */}
+          {/* Header Controls: Primary Game Filter Pills + Compact Toggle Icon + Nav Buttons + Desktop View All Button */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 border border-slate-200">
               <button
                 onClick={() => setSelectedGame("all")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   selectedGame === "all"
                     ? "bg-white text-slate-900 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -334,7 +357,7 @@ export default function HomePage() {
               </button>
               <button
                 onClick={() => setSelectedGame("bgmi")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                   selectedGame === "bgmi"
                     ? "bg-white text-emerald-700 border border-emerald-300 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -345,7 +368,7 @@ export default function HomePage() {
               </button>
               <button
                 onClick={() => setSelectedGame("freefire")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                   selectedGame === "freefire"
                     ? "bg-white text-rose-700 border border-rose-300 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -376,6 +399,37 @@ export default function HomePage() {
                 </span>
               )}
             </button>
+
+            {/* Horizontal Scroll Arrows (Desktop) */}
+            <div className="hidden sm:flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => scrollTournaments("left")}
+                aria-label="Previous tournaments"
+                className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors shadow-2xs cursor-pointer"
+                title="Scroll left"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollTournaments("right")}
+                aria-label="Next tournaments"
+                className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors shadow-2xs cursor-pointer"
+                title="Scroll right"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Desktop View All Button right side parallel */}
+            <Link
+              href="/tournaments"
+              className="hidden md:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer"
+            >
+              <span>View All</span>
+              <ArrowRight className="h-3.5 w-3.5 text-emerald-400" />
+            </Link>
           </div>
         </div>
 
@@ -580,18 +634,27 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Tournaments Grid or Skeleton Loading or Empty State */}
+        {/* Tournaments Horizontal Scrollable Carousel (Scrollbar Hidden) */}
         {isLoadingTournaments ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-4 pt-1 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4 sm:mx-0 sm:px-0">
             {Array.from({ length: 4 }).map((_, i) => (
-              <TournamentCardSkeletonSingle key={i} />
+              <div key={i} className="w-[285px] sm:w-[320px] shrink-0">
+                <TournamentCardSkeletonSingle />
+              </div>
             ))}
           </div>
         ) : filteredTournaments.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {filteredTournaments.map((t) => (
-              <TournamentCard key={t.id} tournament={t} />
-            ))}
+          <div className="relative">
+            <div
+              ref={tournamentScrollRef}
+              className="flex gap-4 sm:gap-5 overflow-x-auto pb-4 pt-1 scroll-smooth snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4 sm:mx-0 sm:px-0"
+            >
+              {filteredTournaments.map((t) => (
+                <div key={t.id} className="w-[285px] sm:w-[320px] shrink-0 snap-start">
+                  <TournamentCard tournament={t} />
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="p-10 rounded-2xl border border-dashed border-slate-300 bg-white text-center space-y-3">

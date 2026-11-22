@@ -183,7 +183,7 @@ export default function ProfilePage() {
 
         <div className="relative px-5 pb-5 pt-0 sm:px-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between -mt-12 sm:-mt-14 gap-3 mb-5">
-            <div className="flex items-end gap-3.5">
+            <div className="flex items-end gap-3.5 min-w-0 max-w-full flex-1">
               <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl border-2 border-white shadow-md overflow-hidden bg-white shrink-0">
                 <Image
                   src={user.avatarUrl || "/avatar.png"}
@@ -461,7 +461,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Achievements & Milestone Rewards Section */}
-      <div id="achievements" className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs space-y-5">
+      <div id="achievements" className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-xs space-y-5 overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
             <div className="flex items-center gap-1.5 text-[11px] font-mono uppercase text-emerald-600 font-bold tracking-wider mb-0.5">
