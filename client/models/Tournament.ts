@@ -5,6 +5,12 @@ export interface IScoringRules {
   eliminationPoints: number; // e.g. 1
 }
 
+export interface IRankPrize {
+  rank: string; // e.g. "1st Place (Champion)", "2nd Place", "3rd Place"
+  reward: number; // e.g. 7500
+  percentage?: number; // e.g. 50
+}
+
 export interface ITournament extends Document {
   title: string;
   slug: string;
@@ -12,9 +18,12 @@ export interface ITournament extends Document {
   format: "solo" | "duo" | "squad";
   organizer: mongoose.Types.ObjectId;
   bannerUrl: string;
+  streamUrl?: string;
+  youtubeStreamUrl?: string;
   description: string;
   entryFee: number; // In INR (0 for free)
   prizePool: number; // In INR
+  prizeDistribution?: IRankPrize[];
   maxSlots: number;
   registeredSlots: number;
   registrationStart: Date;
@@ -24,6 +33,7 @@ export interface ITournament extends Document {
   commissionRateSnapshot: number; // Snapshot of organizer commission at publish time
   scoringRules: IScoringRules;
   rules: string;
+  codeOfConduct?: string;
   visibility: "public" | "private";
   privateToken?: string;
   matchRoomCredentials?: {
@@ -43,9 +53,18 @@ const TournamentSchema = new Schema<ITournament>(
     format: { type: String, enum: ["solo", "duo", "squad"], default: "squad" },
     organizer: { type: Schema.Types.ObjectId, ref: "Organizer", required: true, index: true },
     bannerUrl: { type: String, default: "" },
+    streamUrl: { type: String, default: "" },
+    youtubeStreamUrl: { type: String, default: "" },
     description: { type: String, default: "" },
     entryFee: { type: Number, default: 0 },
     prizePool: { type: Number, default: 0 },
+    prizeDistribution: [
+      {
+        rank: { type: String, required: true },
+        reward: { type: Number, required: true },
+        percentage: { type: Number },
+      },
+    ],
     maxSlots: { type: Number, default: 25 }, // e.g. 25 squads = 100 players
     registeredSlots: { type: Number, default: 0 },
     registrationStart: { type: Date, required: true },
@@ -78,7 +97,8 @@ const TournamentSchema = new Schema<ITournament>(
       },
       eliminationPoints: { type: Number, default: 1.0 },
     },
-    rules: { type: String, default: "Standard esports competitive guidelines apply. Emulators prohibited." },
+    rules: { type: String, default: "Standard esports competitive guidelines apply. Mobile devices only. Emulators prohibited." },
+    codeOfConduct: { type: String, default: "Esports fair play policy applies. Toxicity, abusive language, cheating, and falsified results lead to instant disqualification." },
     visibility: { type: String, enum: ["public", "private"], default: "public", index: true },
     privateToken: { type: String, sparse: true, index: true },
     matchRoomCredentials: {

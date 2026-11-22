@@ -195,6 +195,8 @@ async function seed() {
       eliminationPoints: 1.0,
     },
     rules: "1. Mobile devices only. Emulators prohibited.\n2. Screenshot of result screen mandatory.\n3. Room ID released 15 mins prior.",
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=yWbA1X18Qy4",
+    streamUrl: "https://www.youtube.com/watch?v=yWbA1X18Qy4",
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -222,6 +224,8 @@ async function seed() {
       eliminationPoints: 1.0,
     },
     rules: "Gun properties active as per tournament room rules.",
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=5qap5aO4i9A",
+    streamUrl: "https://www.youtube.com/watch?v=5qap5aO4i9A",
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -249,6 +253,8 @@ async function seed() {
       eliminationPoints: 1.0,
     },
     rules: "Free entry for verified BGMI Character ID holders.",
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=jfKfPfyJRdk",
+    streamUrl: "https://www.youtube.com/watch?v=jfKfPfyJRdk",
     createdAt: new Date(),
     updatedAt: new Date(),
   };

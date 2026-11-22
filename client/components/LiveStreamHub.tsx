@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { 
   Tv, 
@@ -15,16 +15,77 @@ import {
   ShieldCheck, 
   Volume2,
   Share2,
-  Sparkles
+  Sparkles,
+  Play
 } from "lucide-react";
 import { MOCK_LIVE_STREAMS, MockLiveStream } from "@/lib/mockData";
 import { formatINR } from "@/lib/utils";
 
-export default function LiveStreamHub() {
-  const [streams] = useState<MockLiveStream[]>(MOCK_LIVE_STREAMS);
+function YoutubeIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+    </svg>
+  );
+}
+
+function getYouTubeEmbedUrl(url?: string): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.hostname.includes("youtube.com")) {
+      const v = parsed.searchParams.get("v");
+      if (v) return `https://www.youtube-nocookie.com/embed/${v}?autoplay=1&rel=0`;
+      const pathnameParts = parsed.pathname.split("/").filter(Boolean);
+      if ((pathnameParts[0] === "live" || pathnameParts[0] === "embed") && pathnameParts[1]) {
+        return `https://www.youtube-nocookie.com/embed/${pathnameParts[1]}?autoplay=1&rel=0`;
+      }
+    }
+    if (parsed.hostname.includes("youtu.be")) {
+      const id = parsed.pathname.slice(1);
+      if (id) return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`;
+    }
+  } catch {}
+  const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+  const match = trimmed.match(regExp);
+  if (match && match[1]) {
+    return `https://www.youtube-nocookie.com/embed/${match[1]}?autoplay=1&rel=0`;
+  }
+  return null;
+}
+
+interface LiveStreamHubProps {
+  externalSelectedId?: string;
+  onStreamChange?: (streamId: string) => void;
+}
+
+export default function LiveStreamHub({ externalSelectedId, onStreamChange }: LiveStreamHubProps = {}) {
+  const [streams, setStreams] = useState<MockLiveStream[]>(MOCK_LIVE_STREAMS);
   const [selectedStreamId, setSelectedStreamId] = useState<string>(
     MOCK_LIVE_STREAMS[0]?.id || "stream_bgmi_pro"
   );
+  const [filterGame, setFilterGame] = useState<"all" | "bgmi" | "freefire">("all");
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // Sync external stream ID if passed from schedule list
+  useEffect(() => {
+    if (externalSelectedId) {
+      setSelectedStreamId(externalSelectedId);
+    }
+  }, [externalSelectedId]);
+
+  // Read URL params on mount (e.g. /streams?tournamentId=...)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const targetId = params.get("tournamentId") || params.get("tournament");
+      if (targetId) {
+        setSelectedStreamId(targetId);
+        onStreamChange?.(targetId);
+      }
+    }
+  }, []);
 
   // Live emoji hype reactions state
   const [hypeCounts, setHypeCounts] = useState<{ [key: string]: number }>({
@@ -34,8 +95,84 @@ export default function LiveStreamHub() {
     headshot: 1890,
   });
 
+  // Sync with real tournaments from the database
+  useEffect(() => {
+    fetch("/api/tournaments")
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const realLiveStreams: MockLiveStream[] = [];
+          const realFixtures: MockLiveStream[] = [];
+
+          res.data.forEach((t: any) => {
+            const rawStream = t.youtubeStreamUrl || t.streamUrl || "";
+            const embed = getYouTubeEmbedUrl(rawStream);
+            const hasCustomStream = Boolean(rawStream);
+            const isLive = Boolean(hasCustomStream || t.status === "live" || t.isLiveStreamed);
+
+            const streamItem: MockLiveStream = {
+              id: (t._id || t.id)?.toString(),
+              game: t.game === "freefire" ? "freefire" : "bgmi",
+              title: t.title,
+              subtitle: `${(t.format || "squad").toUpperCase()} Fixture • ${t.organizer?.orgName || "Verified Arbiter"}`,
+              tournamentName: t.title,
+              tournamentId: (t._id || t.id)?.toString(),
+              casters: t.casters || (hasCustomStream ? "Official YouTube Stream" : "PlayArena Official Desk"),
+              viewerCount: hasCustomStream ? "LIVE BROADCAST" : (t.status === "live" ? "MATCH IN PLAY" : "STANDBY"),
+              embedUrl: embed || "",
+              streamUrl: rawStream,
+              thumbnailUrl: t.bannerUrl || "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200",
+              isLive: isLive,
+              phase: t.status === "live" ? "🔴 Live Match in Arena" : (hasCustomStream ? "🔴 Active Stream Broadcast" : "Match Kickoff Standby"),
+              prizePool: t.prizePool || 0,
+              isReal: true,
+            };
+
+            if (hasCustomStream || t.status === "live" || t.isLiveStreamed) {
+              realLiveStreams.push(streamItem);
+            } else {
+              realFixtures.push(streamItem);
+            }
+          });
+
+          // Priority: If real database tournaments exist, strictly use them!
+          const combined = realLiveStreams.length > 0 || realFixtures.length > 0
+            ? [...realLiveStreams, ...realFixtures]
+            : MOCK_LIVE_STREAMS;
+
+          // Deduplicate by ID
+          const unique = combined.filter((s, idx, arr) => arr.findIndex((x) => x.id === s.id) === idx);
+          setStreams(unique);
+
+          // Preserve selected stream if requested by props/URL or keep first available
+          if (unique.length > 0) {
+            setSelectedStreamId((prev) => {
+              const prevMatch = unique.find((x) => x.id === prev || x.tournamentId === prev);
+              if (prevMatch) return prevMatch.id;
+              if (externalSelectedId) {
+                const extMatch = unique.find((x) => x.id === externalSelectedId || x.tournamentId === externalSelectedId);
+                if (extMatch) return extMatch.id;
+              }
+              return unique[0].id;
+            });
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filteredStreams = useMemo(() => {
+    if (filterGame === "all") return streams;
+    return streams.filter((s) => s.game === filterGame);
+  }, [streams, filterGame]);
+
   const activeStream =
-    streams.find((s) => s.id === selectedStreamId) || streams[0];
+    streams.find((s) => s.id === selectedStreamId) || filteredStreams[0] || streams[0];
+
+  const liveBroadcastCount = useMemo(() => {
+    return streams.filter((s) => s.isLive).length;
+  }, [streams]);
 
   const handleReaction = (type: "fire" | "trophy" | "thunder" | "headshot") => {
     setHypeCounts((prev) => ({
@@ -43,6 +180,8 @@ export default function LiveStreamHub() {
       [type]: prev[type] + 1,
     }));
   };
+
+  const isEmbeddable = activeStream?.embedUrl && activeStream.embedUrl.includes("/embed/");
 
   return (
     <section 
@@ -66,16 +205,18 @@ export default function LiveStreamHub() {
               Live Esports Stadium
             </h2>
             <p className="mt-2 text-sm sm:text-base text-slate-400 max-w-2xl leading-relaxed">
-              Watch sanctioned BGMI and Free Fire MAX tournaments casted by top casters with live spectator feeds and real-time hype reactions.
+              Watch sanctioned BGMI and Free Fire MAX tournaments casted by top casters with synchronized spectator feeds, live lobby action, and real-time hype reactions.
             </p>
           </div>
 
           {/* Quick Stats Pill */}
           <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/80 border border-slate-700 text-xs font-mono">
             <Radio className="h-4 w-4 text-rose-400 animate-pulse" />
-            <span className="text-slate-300">2 Broadcasts Live Now</span>
+            <span className="text-slate-300">
+              {liveBroadcastCount} {liveBroadcastCount === 1 ? "Broadcast" : "Broadcasts"} Live Now
+            </span>
             <span className="px-2 py-0.5 rounded bg-slate-700 text-emerald-400 font-bold">
-              52.9K Watching
+              Synced with Arena DB
             </span>
           </div>
         </div>
@@ -89,48 +230,100 @@ export default function LiveStreamHub() {
               {/* Broadcast Header Overlay */}
               <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between gap-2 pointer-events-none">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-rose-600 text-white text-xs font-mono font-bold tracking-wider shadow-md">
-                    <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-                    LIVE
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-white text-xs font-mono font-bold tracking-wider shadow-md ${
+                    activeStream?.isLive ? "bg-rose-600" : "bg-slate-700"
+                  }`}>
+                    {activeStream?.isLive && <span className="h-2 w-2 rounded-full bg-white animate-pulse" />}
+                    {activeStream?.isLive ? "LIVE BROADCAST" : "BROADCAST STANDBY"}
                   </span>
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-black/75 backdrop-blur-md text-white text-xs font-mono border border-white/10">
                     <Users className="h-3.5 w-3.5 text-slate-400" />
-                    <span>{activeStream.viewerCount} Viewers</span>
+                    <span>{activeStream?.viewerCount || "LIVE"}</span>
                   </span>
+                  {activeStream?.isReal && (
+                    <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-950/80 text-emerald-400 border border-emerald-500/40 text-[10px] font-mono font-bold uppercase">
+                      Official Arena Tournament
+                    </span>
+                  )}
                 </div>
 
                 <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-md bg-slate-900/90 backdrop-blur-md text-emerald-400 border border-emerald-500/30 text-xs font-mono font-bold">
-                  {formatINR(activeStream.prizePool)} Prize Pool
+                  {formatINR(activeStream?.prizePool || 0)} Prize Pool
                 </span>
               </div>
 
               {/* Video Player / Embed */}
-              <iframe
-                src={activeStream.embedUrl}
-                title={activeStream.title}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
+              {isEmbeddable ? (
+                <iframe
+                  src={activeStream.embedUrl}
+                  title={activeStream.title}
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : (
+                <div className="relative w-full h-full flex flex-col items-center justify-center p-6 text-center bg-slate-950">
+                  <img
+                    src={activeStream?.thumbnailUrl}
+                    alt={activeStream?.title}
+                    className="absolute inset-0 w-full h-full object-cover opacity-20 filter blur-xs"
+                  />
+                  <div className="relative z-10 space-y-3 max-w-md">
+                    <div className="h-16 w-16 mx-auto rounded-2xl bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-500 shadow-lg">
+                      <YoutubeIcon className="h-8 w-8 fill-red-500" />
+                    </div>
+                    <h3 className="text-base sm:text-lg font-bold text-white">
+                      {activeStream?.title}
+                    </h3>
+                    <p className="text-xs text-slate-300">
+                      Live spectator and caster broadcast configured for this tournament match.
+                    </p>
+                    {activeStream?.streamUrl && (
+                      <a
+                        href={activeStream.streamUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-md"
+                      >
+                        <YoutubeIcon className="h-4 w-4 fill-white" />
+                        <span>Watch Directly on YouTube</span>
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Bottom Ticker Overlay */}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 z-20 flex flex-wrap items-end justify-between gap-3 pointer-events-none">
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent p-4 z-20 flex flex-wrap items-end justify-between gap-3 pointer-events-none">
                 <div>
                   <div className="text-[11px] font-mono text-emerald-400 font-bold uppercase tracking-wider">
-                    {activeStream.phase}
+                    {activeStream?.phase}
                   </div>
                   <h3 className="text-base sm:text-lg font-bold text-white line-clamp-1">
-                    {activeStream.title}
+                    {activeStream?.title}
                   </h3>
                   <div className="text-xs text-slate-300 flex items-center gap-1.5 mt-0.5">
                     <Volume2 className="h-3.5 w-3.5 text-slate-400" />
-                    <span>Casters: <strong>{activeStream.casters}</strong></span>
+                    <span>Casters: <strong>{activeStream?.casters}</strong></span>
                   </div>
                 </div>
 
-                <div className="pointer-events-auto">
+                <div className="pointer-events-auto flex items-center gap-2">
+                  {activeStream?.streamUrl && (
+                    <a
+                      href={activeStream.streamUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white font-bold text-xs hover:bg-red-500 transition-colors shadow-sm"
+                    >
+                      <YoutubeIcon className="h-3.5 w-3.5 fill-white" />
+                      <span>YouTube Stream</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
                   <Link
-                    href={`/tournaments/${activeStream.tournamentId}`}
+                    href={`/tournaments/${activeStream?.tournamentId}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs hover:bg-emerald-400 transition-colors shadow-sm"
                   >
                     <span>Tournament Lobby</span>
@@ -144,7 +337,7 @@ export default function LiveStreamHub() {
             <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/80">
               <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
                 <Sparkles className="h-4 w-4 text-amber-400" />
-                <span className="font-semibold text-slate-200">Tap Reactions:</span>
+                <span className="font-semibold text-slate-200">Live Hype Reactions:</span>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -186,19 +379,51 @@ export default function LiveStreamHub() {
           {/* Multi-Channel Switcher Sidebar (4 Cols) */}
           <div className="lg:col-span-4 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-xs font-mono text-slate-400 uppercase tracking-wider">
-              <span>Select Match Broadcast</span>
-              <span className="text-emerald-400 font-bold">{streams.length} Channels</span>
+              <span>Match Broadcast Channels</span>
+              <span className="text-emerald-400 font-bold">{filteredStreams.length} Channels</span>
             </div>
 
-            <div className="space-y-2.5">
-              {streams.map((stream) => {
-                const isSelected = stream.id === activeStream.id;
+            {/* Game Filter Pills */}
+            <div className="flex items-center gap-1.5 pb-1">
+              <button
+                type="button"
+                onClick={() => setFilterGame("all")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer ${
+                  filterGame === "all" ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
+                }`}
+              >
+                All ({streams.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterGame("bgmi")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer ${
+                  filterGame === "bgmi" ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
+                }`}
+              >
+                BGMI
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterGame("freefire")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer ${
+                  filterGame === "freefire" ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
+                }`}
+              >
+                Free Fire
+              </button>
+            </div>
+
+            <div className="space-y-2.5 max-h-[520px] overflow-y-auto pr-1">
+              {filteredStreams.map((stream) => {
+                const isSelected = stream.id === activeStream?.id;
+                const hasStreamLink = Boolean(stream.streamUrl);
 
                 return (
                   <button
                     key={stream.id}
                     onClick={() => setSelectedStreamId(stream.id)}
-                    className={`w-full text-left p-3.5 rounded-xl border transition-all duration-200 cursor-pointer flex gap-3 group ${
+                    className={`w-full text-left p-3 rounded-xl border transition-all duration-200 cursor-pointer flex gap-3 group ${
                       isSelected
                         ? "bg-slate-800 border-emerald-500 ring-2 ring-emerald-500/20"
                         : "bg-slate-800/40 border-slate-800 hover:bg-slate-800 hover:border-slate-700"
@@ -211,9 +436,14 @@ export default function LiveStreamHub() {
                         alt={stream.title}
                         className="h-full w-full object-cover transition-transform group-hover:scale-105"
                       />
-                      {stream.isLive ? (
-                        <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-mono font-bold">
-                          LIVE
+                      {hasStreamLink ? (
+                        <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-red-600 text-white text-[9px] font-mono font-bold flex items-center gap-1 shadow-xs">
+                          <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping" />
+                          <span>LIVE</span>
+                        </div>
+                      ) : stream.isLive ? (
+                        <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-mono font-bold">
+                          READY
                         </div>
                       ) : (
                         <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-slate-900/80 text-slate-300 text-[9px] font-mono">
@@ -229,14 +459,14 @@ export default function LiveStreamHub() {
                           {stream.game === "bgmi" ? "BGMI" : "Free Fire MAX"}
                         </span>
                         <span className="text-[10px] font-mono text-slate-400">
-                          {stream.viewerCount}
+                          {formatINR(stream.prizePool)}
                         </span>
                       </div>
                       <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-1 group-hover:text-emerald-400 transition-colors">
                         {stream.title}
                       </h4>
                       <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                        Caster: {stream.casters}
+                        {stream.subtitle || `Caster: ${stream.casters}`}
                       </p>
                     </div>
                   </button>

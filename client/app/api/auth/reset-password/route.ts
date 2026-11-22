@@ -10,11 +10,18 @@ export async function POST(req: NextRequest) {
   try {
     await connectToDatabase();
     const body = await req.json();
-    const { whatsappNumber, otp, newPassword } = body;
+    const { whatsappNumber, otp, newPassword, confirmPassword } = body;
 
     if (!whatsappNumber || !otp || !newPassword) {
       return NextResponse.json(
         { success: false, error: "WhatsApp number, OTP, and new password are required." },
+        { status: 400 }
+      );
+    }
+
+    if (confirmPassword && newPassword !== confirmPassword) {
+      return NextResponse.json(
+        { success: false, error: "Passwords do not match." },
         { status: 400 }
       );
     }

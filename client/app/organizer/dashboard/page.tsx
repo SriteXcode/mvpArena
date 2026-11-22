@@ -27,12 +27,37 @@ import {
   Send,
   Eye,
   Calculator,
-  Inbox
+  Inbox,
+  Upload,
+  Link as LinkIcon,
+  Video,
+  Trash2,
+  Award,
+  Search,
+  Filter,
+  Phone,
+  Mail,
+  ChevronDown,
+  ChevronUp,
+  MessageCircle,
+  Download,
+  Crown
 } from "lucide-react";
+import ImageDropzone from "@/components/ImageDropzone";
+import DashboardSkeleton from "@/components/skeletons/DashboardSkeleton";
 import { useToast } from "@/lib/context/ToastContext";
 import { formatINR } from "@/lib/utils";
 
+function YoutubeIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+    </svg>
+  );
+}
+
 type TabKey = 
+  | "tournaments_matches"
   | "create" 
   | "previous_results" 
   | "payouts_schedule" 
@@ -40,6 +65,35 @@ type TabKey =
   | "add_result" 
   | "room_credentials" 
   | "profile_upi";
+
+interface RegisteredTeamMember {
+  gameId: string;
+  inGameName: string;
+  role: "captain" | "member" | "substitute";
+  status: "confirmed" | "invited_pending";
+  joinedAt?: string;
+}
+
+interface RegisteredTeam {
+  _id?: string;
+  id?: string;
+  tournamentId: string;
+  tournamentTitle?: string;
+  teamName: string;
+  format: "solo" | "duo" | "squad";
+  captainName: string;
+  captainGameId?: string;
+  captainPhone?: string;
+  captainEmail?: string;
+  squadToken: string;
+  members: RegisteredTeamMember[];
+  maxMembers: number;
+  isEarlyLocked: boolean;
+  paymentStatus: "completed" | "free" | "pending";
+  paymentId?: string;
+  credentialsDelivered?: boolean;
+  createdAt: string;
+}
 
 interface OrganizerProfile {
   _id?: string;
@@ -67,6 +121,8 @@ interface TournamentItem {
   status: string;
   visibility?: "public" | "private";
   privateToken?: string;
+  youtubeStreamUrl?: string;
+  streamUrl?: string;
   matchRoomCredentials?: {
     roomId: string;
     roomPassword: string;
@@ -89,7 +145,7 @@ interface ResultArchiveItem {
 
 export default function OrganizerDashboardPage() {
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<TabKey>("payouts_schedule");
+  const [activeTab, setActiveTab] = useState<TabKey>("tournaments_matches");
   const [loading, setLoading] = useState(true);
   const [copiedToken, setCopiedToken] = useState(false);
 
@@ -108,6 +164,16 @@ export default function OrganizerDashboardPage() {
   const [tournaments, setTournaments] = useState<TournamentItem[]>([]);
   const [resultsArchive, setResultsArchive] = useState<ResultArchiveItem[]>([]);
 
+  // Matches & Tournaments / Registered Teams State (Real data only, no dummy data)
+  const [matchCategoryFilter, setMatchCategoryFilter] = useState<"all" | "live" | "upcoming" | "concluded">("all");
+  const [matchSearchQuery, setMatchSearchQuery] = useState<string>("");
+  const [expandedTourneyTeamsId, setExpandedTourneyTeamsId] = useState<string | null>(null);
+  const [registeredTeams, setRegisteredTeams] = useState<RegisteredTeam[]>([]);
+  const [selectedTourneyForTeams, setSelectedTourneyForTeams] = useState<string>("all");
+  const [teamSearchQuery, setTeamSearchQuery] = useState<string>("");
+  const [teamStatusFilter, setTeamStatusFilter] = useState<"all" | "completed" | "free" | "pending">("all");
+  const [copiedRosterTeamId, setCopiedRosterTeamId] = useState<string | null>(null);
+
   // Tab 1 Form State: Create Tournament
   const [createForm, setCreateForm] = useState({
     title: "",
@@ -121,10 +187,63 @@ export default function OrganizerDashboardPage() {
     firstPlacePoints: 15,
     killPoints: 1,
     bannerUrl: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800",
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
     description: "Official competitive tournament with automated standings and instant prize pool.",
-    rules: "Standard esports tournament rules. Mobile devices only. Emulators strictly forbidden.",
+    rules: "1. Device Policy: Mobile phones only (iOS / Android). Emulators, triggers, and iPad/tablets are strictly forbidden.\n2. Integrity: Cheating, teaming, hacking, or third-party config files will result in an immediate lifetime ban.\n3. Punctuality: Room credentials are dispatched 15 minutes before kick-off. Matches start on schedule.",
+    codeOfConduct: "1. Fair Play: All participants must maintain esports integrity and respect referees and fellow competitors.\n2. Non-Toxic Environment: Abusive language, harassment, hate speech, or toxicity in lobbies will lead to disqualification.\n3. Disqualification & Forfeiture: Failing to verify results, submitting falsified screenshots, or intentional disconnects will forfeit prize entitlements.",
   });
+  const [prizeRanks, setPrizeRanks] = useState<Array<{ rank: string; reward: number; percentage: number }>>([
+    { rank: "1st Place (Champion)", reward: 7500, percentage: 50 },
+    { rank: "2nd Place (Runner-Up)", reward: 4500, percentage: 30 },
+    { rank: "3rd Place (2nd Runner-Up)", reward: 3000, percentage: 20 },
+  ]);
   const [newPrivateToken, setNewPrivateToken] = useState<string | null>(null);
+  const [bannerUploadMode, setBannerUploadMode] = useState<"upload" | "url">("upload");
+  const [evidenceUploadMode, setEvidenceUploadMode] = useState<"upload" | "url">("upload");
+
+  const applyPrizePreset = (preset: "top3" | "top5" | "winner") => {
+    const total = Number(createForm.prizePool) || 0;
+    if (preset === "top3") {
+      setPrizeRanks([
+        { rank: "1st Place (Champion)", reward: Math.round(total * 0.5), percentage: 50 },
+        { rank: "2nd Place (Runner-Up)", reward: Math.round(total * 0.3), percentage: 30 },
+        { rank: "3rd Place (2nd Runner-Up)", reward: Math.round(total * 0.2), percentage: 20 },
+      ]);
+    } else if (preset === "top5") {
+      setPrizeRanks([
+        { rank: "1st Place (Champion)", reward: Math.round(total * 0.4), percentage: 40 },
+        { rank: "2nd Place (Runner-Up)", reward: Math.round(total * 0.25), percentage: 25 },
+        { rank: "3rd Place", reward: Math.round(total * 0.15), percentage: 15 },
+        { rank: "4th Place", reward: Math.round(total * 0.1), percentage: 10 },
+        { rank: "5th Place", reward: Math.round(total * 0.1), percentage: 10 },
+      ]);
+    } else if (preset === "winner") {
+      setPrizeRanks([
+        { rank: "1st Place (Winner Takes All)", reward: total, percentage: 100 },
+      ]);
+    }
+  };
+
+  const handleRankRewardChange = (index: number, newReward: number) => {
+    const updated = [...prizeRanks];
+    const total = Number(createForm.prizePool) || 1;
+    updated[index].reward = newReward;
+    updated[index].percentage = Math.round((newReward / total) * 100);
+    setPrizeRanks(updated);
+  };
+
+  const handleAddRankTier = () => {
+    const nextNum = prizeRanks.length + 1;
+    setPrizeRanks([
+      ...prizeRanks,
+      { rank: `${nextNum}th Place`, reward: 0, percentage: 0 },
+    ]);
+  };
+
+  const handleRemoveRankTier = (index: number) => {
+    if (prizeRanks.length <= 1) return;
+    setPrizeRanks(prizeRanks.filter((_, i) => i !== index));
+  };
 
   // Tab 5 Form State: Add Result of Match
   const [resultForm, setResultForm] = useState({
@@ -141,6 +260,7 @@ export default function OrganizerDashboardPage() {
     tournamentId: "",
     roomId: "",
     roomPassword: "",
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
   });
 
   // Tab 7 Form State: Edit Profile & UPI ID
@@ -178,6 +298,7 @@ export default function OrganizerDashboardPage() {
                 tournamentId: res.data.tournaments[0]._id,
                 roomId: res.data.tournaments[0].matchRoomCredentials?.roomId || "",
                 roomPassword: res.data.tournaments[0].matchRoomCredentials?.roomPassword || "",
+                youtubeStreamUrl: res.data.tournaments[0].youtubeStreamUrl || res.data.tournaments[0].streamUrl || "",
               }));
               setResultForm((prev) => ({
                 ...prev,
@@ -199,6 +320,31 @@ export default function OrganizerDashboardPage() {
             }));
             setResultsArchive(mappedResults);
           }
+          if (res.data.registrations && res.data.registrations.length > 0) {
+            const mapped: RegisteredTeam[] = res.data.registrations.map((r: any) => ({
+              _id: r._id,
+              id: r._id,
+              tournamentId: typeof r.tournament === "object" ? r.tournament?._id : (r.tournament || "all"),
+              tournamentTitle: typeof r.tournament === "object" ? r.tournament?.title : undefined,
+              teamName: r.teamName,
+              format: r.format || "squad",
+              captainName: r.captain?.name || "Team Captain",
+              captainGameId: r.members?.[0]?.gameId || "N/A",
+              captainPhone: r.captain?.phone || r.captain?.whatsappNumber || "",
+              captainEmail: r.captain?.email || "",
+              squadToken: r.squadToken,
+              members: r.members || [],
+              maxMembers: r.maxMembers || 4,
+              isEarlyLocked: r.isEarlyLocked ?? true,
+              paymentStatus: r.paymentStatus || "completed",
+              paymentId: r.paymentId,
+              credentialsDelivered: r.credentialsDelivered || false,
+              createdAt: r.createdAt || new Date().toISOString(),
+            }));
+            setRegisteredTeams(mapped);
+          } else {
+            setRegisteredTeams([]);
+          }
         }
       })
       .catch((err) => {
@@ -219,7 +365,10 @@ export default function OrganizerDashboardPage() {
       const res = await fetch("/api/tournaments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(createForm),
+        body: JSON.stringify({
+          ...createForm,
+          prizeDistribution: prizeRanks,
+        }),
       });
       const data = await res.json();
       if (data.success && data.data) {
@@ -230,6 +379,17 @@ export default function OrganizerDashboardPage() {
           toast.info("Direct registration invite link generated below.", "Access Control");
         } else {
           toast.success("Tournament published and live on PlayArena public marketplace!", "Event Created");
+        }
+        if (createForm.youtubeStreamUrl) {
+          try {
+            localStorage.setItem("mvp_stream_active", createForm.youtubeStreamUrl);
+            if (data.data._id) {
+              localStorage.setItem(`mvp_stream_${data.data._id}`, createForm.youtubeStreamUrl);
+            }
+            if (data.data.slug) {
+              localStorage.setItem(`mvp_stream_${data.data.slug}`, createForm.youtubeStreamUrl);
+            }
+          } catch {}
         }
         setCreateForm({
           ...createForm,
@@ -297,6 +457,13 @@ export default function OrganizerDashboardPage() {
       return;
     }
 
+    if (credentialForm.youtubeStreamUrl) {
+      try {
+        localStorage.setItem(`mvp_stream_${credentialForm.tournamentId}`, credentialForm.youtubeStreamUrl);
+        localStorage.setItem("mvp_stream_active", credentialForm.youtubeStreamUrl);
+      } catch {}
+    }
+
     try {
       const res = await fetch("/api/organizer/matches/credentials", {
         method: "POST",
@@ -316,6 +483,8 @@ export default function OrganizerDashboardPage() {
                     roomId: credentialForm.roomId,
                     roomPassword: credentialForm.roomPassword,
                   },
+                  youtubeStreamUrl: credentialForm.youtubeStreamUrl,
+                  streamUrl: credentialForm.youtubeStreamUrl,
                 }
               : t
           )
@@ -357,11 +526,123 @@ export default function OrganizerDashboardPage() {
     }
   };
 
+  // Handlers for Registered Teams Tab
+  const handleCopySquadToken = (token: string) => {
+    navigator.clipboard.writeText(token);
+    setCopiedToken(true);
+    toast.success(`Squad Token "${token}" copied to clipboard!`, "Token Copied");
+    setTimeout(() => setCopiedToken(false), 2000);
+  };
+
+  const handleCopyTeamRoster = (team: RegisteredTeam) => {
+    const lines = [
+      `TEAM: ${team.teamName} [Format: ${team.format.toUpperCase()} | Token: ${team.squadToken}]`,
+      `Captain: ${team.captainName} (UID: ${team.captainGameId || "N/A"})${team.captainPhone ? ` | WA: ${team.captainPhone}` : ""}`,
+      `Roster Members:`,
+      ...team.members.map((m, i) => `  Slot ${i + 1}: [${(m.role || "member").toUpperCase()}] ${m.inGameName} (UID: ${m.gameId}) - ${m.status}`),
+    ];
+    navigator.clipboard.writeText(lines.join("\n"));
+    const key = team.id || team._id || team.squadToken;
+    setCopiedRosterTeamId(key);
+    toast.success(`Roster for "${team.teamName}" copied to clipboard!`, "Roster Copied");
+    setTimeout(() => setCopiedRosterTeamId(null), 2500);
+  };
+
+  const filteredRegisteredTeams = registeredTeams.filter((team) => {
+    // 1. Tournament filter
+    if (selectedTourneyForTeams !== "all") {
+      if (team.tournamentId !== selectedTourneyForTeams && team.tournamentId !== "all") {
+        return false;
+      }
+    }
+
+    // 2. Status filter
+    if (teamStatusFilter !== "all") {
+      if (team.paymentStatus !== teamStatusFilter) {
+        return false;
+      }
+    }
+
+    // 3. Search query
+    if (teamSearchQuery.trim()) {
+      const q = teamSearchQuery.toLowerCase();
+      const matchTeam = team.teamName.toLowerCase().includes(q);
+      const matchToken = team.squadToken.toLowerCase().includes(q);
+      const matchCaptain = team.captainName.toLowerCase().includes(q);
+      const matchUID = team.captainGameId?.toLowerCase().includes(q);
+      const matchMember = team.members.some(
+        (m) => m.inGameName.toLowerCase().includes(q) || m.gameId.toLowerCase().includes(q)
+      );
+      if (!matchTeam && !matchToken && !matchCaptain && !matchUID && !matchMember) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  const handleExportAllRosters = () => {
+    if (filteredRegisteredTeams.length === 0) {
+      toast.warning("No teams currently match your filter.", "No Teams");
+      return;
+    }
+    const fullSheet = [
+      `=== OFFICIAL TOURNAMENT ROSTER SHEET ===`,
+      `Generated: ${new Date().toLocaleString("en-IN")}`,
+      `Total Registered Teams: ${filteredRegisteredTeams.length}`,
+      ``,
+      ...filteredRegisteredTeams.map((t, idx) => {
+        return [
+          `SLOT #${idx + 1}: ${t.teamName.toUpperCase()} [Token: ${t.squadToken} | Payment: ${t.paymentStatus.toUpperCase()}]`,
+          `Captain: ${t.captainName} (UID: ${t.captainGameId || "N/A"})${t.captainPhone ? ` | WA: ${t.captainPhone}` : ""}`,
+          `Members (${t.members.length}/${t.maxMembers}):`,
+          ...t.members.map((m, mi) => `   ${mi + 1}. ${m.inGameName} [UID: ${m.gameId}] (${m.role})`),
+          `------------------------------------------------`,
+        ].join("\n");
+      }),
+    ].join("\n");
+
+    navigator.clipboard.writeText(fullSheet);
+    toast.success(`Exported complete sheet of ${filteredRegisteredTeams.length} teams to clipboard!`, "Roster Sheet Exported");
+  };
+
+  // Matches & Tournaments Categorization (Live, Upcoming, Concluded)
+  const getTourneyCategory = (t: TournamentItem): "live" | "upcoming" | "concluded" => {
+    if (t.status === "live") return "live";
+    if (t.status === "completed" || t.status === "cancelled") return "concluded";
+    return "upcoming";
+  };
+
+  const liveTournamentsCount = tournaments.filter((t) => getTourneyCategory(t) === "live").length;
+  const upcomingTournamentsCount = tournaments.filter((t) => getTourneyCategory(t) === "upcoming").length;
+  const concludedTournamentsCount = tournaments.filter((t) => getTourneyCategory(t) === "concluded").length;
+
+  const filteredTournamentsMatches = tournaments.filter((t) => {
+    const cat = getTourneyCategory(t);
+    if (matchCategoryFilter !== "all" && cat !== matchCategoryFilter) {
+      return false;
+    }
+    if (matchSearchQuery.trim()) {
+      const q = matchSearchQuery.toLowerCase();
+      const matchTitle = t.title.toLowerCase().includes(q);
+      const matchGame = t.game.toLowerCase().includes(q);
+      const matchFormat = t.format.toLowerCase().includes(q);
+      if (!matchTitle && !matchGame && !matchFormat) {
+        return false;
+      }
+    }
+    return true;
+  });
+
   // Financial aggregates
   const totalTournamentsCount = tournaments.length;
   const ticketGrossVolume = tournaments.reduce((acc, t) => acc + (t.registeredSlots * t.entryFee), 0);
   const platformFee = Math.round((ticketGrossVolume * (profile.commissionRate || 10)) / 100);
   const netEarnings = ticketGrossVolume - platformFee;
+
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -383,6 +664,13 @@ export default function OrganizerDashboardPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab("tournaments_matches")}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg bg-white border border-slate-200 text-slate-800 text-xs font-bold uppercase tracking-wider hover:bg-slate-50 transition-all shadow-xs"
+          >
+            <Gamepad2 className="h-4 w-4 text-emerald-600" />
+            <span>Matches &amp; Tournaments</span>
+          </button>
           <button
             onClick={() => setActiveTab("create")}
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-xs font-bold uppercase tracking-wider hover:bg-emerald-500 transition-all shadow-md shadow-emerald-600/20"
@@ -436,10 +724,11 @@ export default function OrganizerDashboardPage() {
         </div>
       </div>
 
-      {/* 7 Tabs Navigation Bar */}
+      {/* 8 Tabs Navigation Bar */}
       <div className="border-b border-slate-200 bg-white rounded-xl shadow-xs overflow-x-auto">
         <div className="flex items-center min-w-max p-1.5 gap-1">
           {[
+            { key: "tournaments_matches" as TabKey, label: "Matches & Tournaments", icon: Gamepad2 },
             { key: "create" as TabKey, label: "Create Tournament", icon: Plus },
             { key: "previous_results" as TabKey, label: "Previous Match Results", icon: History },
             { key: "payouts_schedule" as TabKey, label: "Payouts & Schedule", icon: DollarSign },
@@ -612,29 +901,235 @@ export default function OrganizerDashboardPage() {
               </div>
             </div>
 
-            {/* Event Date & Banner */}
+            {/* Event Schedule */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Event Schedule (Date &amp; Time)
+              </label>
+              <input
+                type="datetime-local"
+                value={createForm.eventDate}
+                onChange={(e) => setCreateForm({ ...createForm, eventDate: e.target.value })}
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900"
+              />
+            </div>
+
+            {/* Banner Artwork: Upload Image or URL */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Tournament Cover Artwork / Banner
+                </label>
+                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[11px] font-medium">
+                  <button
+                    type="button"
+                    onClick={() => setBannerUploadMode("upload")}
+                    className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                      bannerUploadMode === "upload"
+                        ? "bg-white text-emerald-700 shadow-xs font-semibold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <Upload className="h-3 w-3" />
+                    <span>Upload Image</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBannerUploadMode("url")}
+                    className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                      bannerUploadMode === "url"
+                        ? "bg-white text-emerald-700 shadow-xs font-semibold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <LinkIcon className="h-3 w-3" />
+                    <span>Image URL</span>
+                  </button>
+                </div>
+              </div>
+
+              {bannerUploadMode === "upload" ? (
+                <ImageDropzone
+                  value={createForm.bannerUrl}
+                  onChange={(url) => setCreateForm({ ...createForm, bannerUrl: url })}
+                  aspectRatio="video"
+                  label=""
+                  hint="Drag & drop custom banner artwork, click to browse files, or paste (Ctrl+V)"
+                />
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/..."
+                    value={createForm.bannerUrl}
+                    onChange={(e) => setCreateForm({ ...createForm, bannerUrl: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900"
+                  />
+                  {createForm.bannerUrl && (
+                    <div className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50 max-h-48 flex items-center justify-center">
+                      <img
+                        src={createForm.bannerUrl}
+                        alt="Banner Preview"
+                        className="max-h-48 w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* YouTube Stream Link (Optional) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Video className="h-3.5 w-3.5 text-rose-600" />
+                  <span>YouTube Stream Link (Optional)</span>
+                </label>
+                <span className="text-[10px] font-mono uppercase bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-semibold">Optional</span>
+              </div>
+              <input
+                type="url"
+                placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                value={createForm.youtubeStreamUrl}
+                onChange={(e) => setCreateForm({ ...createForm, youtubeStreamUrl: e.target.value })}
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900 placeholder-slate-400"
+              />
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                Provide a YouTube stream or channel link if this tournament will be broadcasted live.
+              </span>
+            </div>
+
+            {/* Prize Pool Breakdown & Rank Rewards */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-2.5">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <Trophy className="h-4 w-4 text-amber-500" />
+                    <span className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider">
+                      Prize Pool Breakdown by Rank
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Configure rank rewards. Total allocated: ₹{prizeRanks.reduce((sum, r) => sum + (Number(r.reward) || 0), 0).toLocaleString("en-IN")} of ₹{Number(createForm.prizePool).toLocaleString("en-IN")}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  <span className="text-slate-500">Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => applyPrizePreset("top3")}
+                    className="px-2 py-0.5 rounded bg-white border border-slate-200 hover:border-emerald-600 text-slate-700 font-medium"
+                  >
+                    Top 3 (50/30/20)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPrizePreset("top5")}
+                    className="px-2 py-0.5 rounded bg-white border border-slate-200 hover:border-emerald-600 text-slate-700 font-medium"
+                  >
+                    Top 5
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPrizePreset("winner")}
+                    className="px-2 py-0.5 rounded bg-white border border-slate-200 hover:border-emerald-600 text-slate-700 font-medium"
+                  >
+                    Winner 100%
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {prizeRanks.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200">
+                    <div className="w-8 h-8 rounded-md bg-amber-50 text-amber-800 font-mono font-bold text-xs flex items-center justify-center shrink-0 border border-amber-200">
+                      #{idx + 1}
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      value={item.rank}
+                      onChange={(e) => {
+                        const updated = [...prizeRanks];
+                        updated[idx].rank = e.target.value;
+                        setPrizeRanks(updated);
+                      }}
+                      placeholder="e.g. 1st Place (Champion)"
+                      className="flex-1 px-2.5 py-1.5 rounded border border-slate-200 text-xs text-slate-800"
+                    />
+                    <div className="relative w-32 shrink-0">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₹</span>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        value={item.reward}
+                        onChange={(e) => handleRankRewardChange(idx, Number(e.target.value))}
+                        className="w-full pl-6 pr-2.5 py-1.5 rounded border border-slate-200 text-xs font-mono font-bold text-amber-700"
+                      />
+                    </div>
+                    {item.percentage !== undefined && (
+                      <span className="text-[11px] font-mono text-slate-400 w-12 text-right shrink-0">
+                        {item.percentage}%
+                      </span>
+                    )}
+                    {prizeRanks.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveRankTier(idx)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded transition-colors"
+                        title="Remove tier"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddRankTier}
+                className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-semibold hover:underline pt-1"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Add Rank Tier</span>
+              </button>
+            </div>
+
+            {/* Rules and Code of Conduct */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Event Schedule (Date &amp; Time)
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Tournament Official Rules *</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Format, Devices, Punctuality</span>
                 </label>
-                <input
-                  type="datetime-local"
-                  value={createForm.eventDate}
-                  onChange={(e) => setCreateForm({ ...createForm, eventDate: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900"
+                <textarea
+                  rows={4}
+                  required
+                  value={createForm.rules}
+                  onChange={(e) => setCreateForm({ ...createForm, rules: e.target.value })}
+                  placeholder="1. Mobile devices only. Emulators prohibited..."
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-900 leading-relaxed font-sans"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Banner Artwork Image URL
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Code of Conduct &amp; Fair Play *</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Anti-Cheat, Respect, Toxicity Policy</span>
                 </label>
-                <input
-                  type="url"
-                  value={createForm.bannerUrl}
-                  onChange={(e) => setCreateForm({ ...createForm, bannerUrl: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900"
+                <textarea
+                  rows={4}
+                  required
+                  value={createForm.codeOfConduct}
+                  onChange={(e) => setCreateForm({ ...createForm, codeOfConduct: e.target.value })}
+                  placeholder="1. Respect arbiters and opponents..."
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-900 leading-relaxed font-sans"
                 />
               </div>
             </div>
@@ -662,12 +1157,13 @@ export default function OrganizerDashboardPage() {
               <div className="flex items-center gap-2">
                 <input
                   readOnly
-                  value={`http://localhost:3000/tournaments/join-token?token=${newPrivateToken}`}
+                  value={typeof window !== "undefined" ? `${window.location.origin}/join?token=${newPrivateToken}` : `http://localhost:3000/join?token=${newPrivateToken}`}
                   className="w-full bg-white border border-purple-300 px-3 py-2 rounded-lg text-xs font-mono text-purple-900"
                 />
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(`http://localhost:3000/tournaments/join-token?token=${newPrivateToken}`);
+                    const url = typeof window !== "undefined" ? `${window.location.origin}/join?token=${newPrivateToken}` : `http://localhost:3000/join?token=${newPrivateToken}`;
+                    navigator.clipboard.writeText(url);
                     setCopiedToken(true);
                     toast.info("Private invite link copied to clipboard!", "Link Copied");
                     setTimeout(() => setCopiedToken(false), 2000);
@@ -678,6 +1174,443 @@ export default function OrganizerDashboardPage() {
                   <span>{copiedToken ? "Copied" : "Copy"}</span>
                 </button>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: MATCHES & TOURNAMENTS (Live, Upcoming, Concluded) */}
+      {activeTab === "tournaments_matches" && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
+          {/* Header & Controls */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-mono font-bold uppercase">
+                  Tournament Operations
+                </span>
+                <span className="text-xs text-slate-400">•</span>
+                <span className="text-xs text-slate-500 font-mono">
+                  {tournaments.length} Matches &amp; Tournaments Active
+                </span>
+              </div>
+              <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                Matches &amp; Tournaments Ledger
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Explore Live, Upcoming, and Concluded matches. Click on any tournament or match to view real registered teams &amp; player details.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setActiveTab("create")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Host New Tournament</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Sub-Category Filter Tabs: All, Live, Upcoming, Concluded */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto w-full sm:w-auto no-scrollbar">
+              {[
+                { key: "all" as const, label: "All Fixtures", count: tournaments.length },
+                { key: "live" as const, label: "🔴 Live Matches", count: liveTournamentsCount },
+                { key: "upcoming" as const, label: "⏳ Upcoming Scheduled", count: upcomingTournamentsCount },
+                { key: "concluded" as const, label: "✅ Concluded Matches", count: concludedTournamentsCount },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setMatchCategoryFilter(tab.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
+                    matchCategoryFilter === tab.key
+                      ? "bg-white text-slate-900 shadow-2xs font-bold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    matchCategoryFilter === tab.key ? "bg-slate-900 text-white" : "bg-slate-200 text-slate-700"
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Search */}
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search fixture title or game..."
+                value={matchSearchQuery}
+                onChange={(e) => setMatchSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs placeholder:text-slate-400 focus:outline-emerald-500 shadow-2xs"
+              />
+              {matchSearchQuery && (
+                <button
+                  onClick={() => setMatchSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Tournaments List Grid */}
+          {filteredTournamentsMatches.length === 0 ? (
+            <div className="text-center py-16 px-4 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 space-y-3">
+              <div className="h-12 w-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                <Gamepad2 className="h-6 w-6" />
+              </div>
+              <h4 className="text-sm font-bold text-slate-900">
+                {matchCategoryFilter !== "all"
+                  ? `No ${matchCategoryFilter.toUpperCase()} Matches Found`
+                  : "No Tournaments or Matches Created Yet"}
+              </h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                {matchSearchQuery
+                  ? "No fixtures match your current search keyword. Try a different search."
+                  : "Publish an esports fixture to generate public registrations or secret scrim tokens."}
+              </p>
+              <div className="pt-2">
+                <button
+                  onClick={() => setActiveTab("create")}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Create First Tournament</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredTournamentsMatches.map((t) => {
+                const category = getTourneyCategory(t);
+                const isLive = category === "live";
+                const isConcluded = category === "concluded";
+                const registeredCount = t.registeredSlots || 0;
+                const fillPct = Math.min(100, Math.round((registeredCount / t.maxSlots) * 100));
+                const isExpanded = expandedTourneyTeamsId === t._id;
+                const realTeams = registeredTeams.filter((rt) => rt.tournamentId === t._id);
+
+                return (
+                  <div
+                    key={t._id}
+                    className={`rounded-xl border bg-white overflow-hidden shadow-2xs hover:shadow-xs transition-all ${
+                      isLive
+                        ? "border-rose-200 ring-1 ring-rose-200/50"
+                        : isConcluded
+                        ? "border-slate-200 opacity-90"
+                        : "border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    {/* Top Row: Badges & Schedule */}
+                    <div className="p-4 bg-slate-50/70 border-b border-slate-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                          t.game === "bgmi"
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                            : "bg-rose-50 text-rose-800 border border-rose-200"
+                        }`}>
+                          {t.game === "bgmi" ? "BGMI" : "FREE FIRE MAX"}
+                        </span>
+
+                        <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono font-semibold text-slate-700 uppercase">
+                          {t.format}
+                        </span>
+
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                            isLive
+                              ? "bg-rose-600 text-white shadow-2xs"
+                              : isConcluded
+                              ? "bg-slate-200 text-slate-700"
+                              : "bg-emerald-600 text-white shadow-2xs"
+                          }`}
+                        >
+                          {isLive && <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping" />}
+                          {isLive ? "LIVE NOW" : isConcluded ? "CONCLUDED" : "UPCOMING"}
+                        </span>
+
+                        {t.visibility === "private" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 text-[10px] font-mono font-semibold">
+                            <Lock className="h-2.5 w-2.5" />
+                            PRIVATE
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-xs font-mono text-slate-600">
+                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                        <span>
+                          {new Date(t.tournamentDate).toLocaleDateString("en-IN", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Middle Section: Title & Key Metrics */}
+                    <div className="p-4 space-y-3">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div>
+                          <Link
+                            href={`/organizer/tournaments/${t._id}/teams`}
+                            className="text-base font-bold text-slate-900 hover:text-emerald-700 transition-colors tracking-tight flex items-center gap-2 group"
+                          >
+                            <span>{t.title}</span>
+                            <span className="text-xs text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                              (Click to open teams page →)
+                            </span>
+                          </Link>
+                          <span className="text-[11px] text-slate-500 font-mono mt-0.5 block">
+                            Fixture ID: <strong className="text-slate-700">{t._id}</strong>
+                          </span>
+                        </div>
+
+                        {/* Slots Fill Bar */}
+                        <div className="min-w-[180px] p-2.5 rounded-lg bg-slate-50 border border-slate-200/70">
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-[10px] font-mono text-slate-500 uppercase">Roster Capacity</span>
+                            <span className="font-bold font-mono text-emerald-700">
+                              {registeredCount}/{t.maxSlots} Slots
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-emerald-500 rounded-full transition-all"
+                              style={{ width: `${fillPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Financial & Room Details Bar */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-2 border-t border-slate-100 text-xs">
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-mono uppercase block">Total Prize Pool</span>
+                          <span className="font-bold font-mono text-amber-700">
+                            {formatINR(t.prizePool)}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-mono uppercase block">Participation Tariff</span>
+                          <span className="font-bold font-mono text-slate-900">
+                            {t.entryFee === 0 ? "FREE" : `₹${t.entryFee}`}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-mono uppercase block">Room ID &amp; Password</span>
+                          <span className={`inline-flex items-center gap-1 font-mono text-[11px] font-bold ${
+                            t.matchRoomCredentials?.roomId ? "text-emerald-700" : "text-amber-600"
+                          }`}>
+                            {t.matchRoomCredentials?.roomId ? `ID: ${t.matchRoomCredentials.roomId}` : "Pending Setup ⚠️"}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-mono uppercase block">Official Stream</span>
+                          {t.youtubeStreamUrl || t.streamUrl ? (
+                            <a
+                              href={t.youtubeStreamUrl || t.streamUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-red-600 hover:underline"
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full bg-red-600 animate-ping"></span>
+                              <span>Live Stream ↗</span>
+                            </a>
+                          ) : (
+                            <span className="text-[11px] font-mono text-slate-400">
+                              Standby ⏳
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-mono uppercase block">Direct Teams Link</span>
+                          <span className="text-[11px] font-mono text-slate-500">
+                            /tournaments/{t._id}/teams
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Action Strip */}
+                    <div className="p-3 bg-slate-50/50 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Primary Button to Open Teams Page */}
+                        <Link
+                          href={`/organizer/tournaments/${t._id}/teams`}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider shadow-2xs transition-colors"
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                          <span>View Registered Teams ({registeredCount})</span>
+                        </Link>
+
+                        {/* Inline Quick Inspect Toggle */}
+                        <button
+                          onClick={() => setExpandedTourneyTeamsId(isExpanded ? null : t._id)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs transition-colors"
+                        >
+                          <span>{isExpanded ? "Hide Inline Teams ▲" : "Quick Inspect Roster ▼"}</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={() => {
+                            setCredentialForm({
+                              tournamentId: t._id,
+                              roomId: t.matchRoomCredentials?.roomId || "",
+                              roomPassword: t.matchRoomCredentials?.roomPassword || "",
+                              youtubeStreamUrl: t.youtubeStreamUrl || t.streamUrl || "",
+                            });
+                            setActiveTab("room_credentials");
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 text-xs font-semibold shadow-2xs transition-colors"
+                        >
+                          <Key className="h-3 w-3" />
+                          <span>Room ID &amp; Pass</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setCredentialForm({
+                              tournamentId: t._id,
+                              roomId: t.matchRoomCredentials?.roomId || "",
+                              roomPassword: t.matchRoomCredentials?.roomPassword || "",
+                              youtubeStreamUrl: t.youtubeStreamUrl || t.streamUrl || "",
+                            });
+                            setActiveTab("room_credentials");
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 text-xs font-semibold shadow-2xs transition-colors"
+                        >
+                          <YoutubeIcon className="h-3.5 w-3.5 fill-red-600" />
+                          <span>{t.youtubeStreamUrl || t.streamUrl ? "Stream Link ✓" : "Set Stream Link"}</span>
+                        </button>
+
+                        <Link
+                          href={`/tournaments/${t._id}`}
+                          target="_blank"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 text-xs font-semibold shadow-2xs transition-colors"
+                        >
+                          <span>Public Fixture</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      </div>
+                    </div>
+
+                    {/* Inline Teams Display (when toggled) - REAL DATA ONLY, NO DUMMY DATA */}
+                    {isExpanded && (
+                      <div className="p-4 bg-slate-100/50 border-t border-slate-200 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-mono font-bold uppercase text-slate-700 flex items-center gap-1.5">
+                            <Users className="h-3.5 w-3.5 text-emerald-600" />
+                            <span>Real Registered Teams for "{t.title}"</span>
+                          </h4>
+                          <Link
+                            href={`/organizer/tournaments/${t._id}/teams`}
+                            className="text-xs font-semibold text-emerald-700 hover:underline flex items-center gap-1"
+                          >
+                            <span>Open Dedicated Page</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        </div>
+
+                        {realTeams.length === 0 ? (
+                          <div className="p-5 bg-white rounded-xl border border-dashed border-slate-200 text-center space-y-2">
+                            <div className="flex items-center justify-center h-8 w-8 rounded-full bg-slate-100 text-slate-400 mx-auto">
+                              <Users className="h-4 w-4" />
+                            </div>
+                            <p className="text-xs font-mono font-semibold text-slate-800">
+                              0 Real Teams Registered Yet
+                            </p>
+                            <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                              No dummy data is shown. When real squads register for this tournament, their team details, UIDs, and captain info will appear right here.
+                            </p>
+                            <div className="pt-1">
+                              <Link
+                                href={`/tournaments/${t._id}`}
+                                target="_blank"
+                                className="inline-flex items-center gap-1 text-xs text-emerald-600 font-semibold hover:underline"
+                              >
+                                <span>Go to registration fixture page to test registering a real team →</span>
+                              </Link>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2.5">
+                            {realTeams.map((team, idx) => (
+                              <div
+                                key={team.id || team._id || idx}
+                                className="p-3.5 rounded-lg bg-white border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3"
+                              >
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-xs font-bold text-emerald-700">
+                                      #{idx + 1}
+                                    </span>
+                                    <strong className="text-xs text-slate-900 font-bold">
+                                      {team.teamName}
+                                    </strong>
+                                    <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 text-[10px] font-mono font-semibold">
+                                      Token: {team.squadToken}
+                                    </span>
+                                    <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold uppercase ${
+                                      team.paymentStatus === "completed"
+                                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                        : "bg-slate-100 text-slate-700"
+                                    }`}>
+                                      {team.paymentStatus === "completed" ? "Paid" : team.paymentStatus}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 font-mono mt-1 flex flex-wrap items-center gap-3">
+                                    <span>Captain: <strong className="text-slate-800">{team.captainName}</strong> (UID: {team.captainGameId})</span>
+                                    {team.captainPhone && <span>Phone: {team.captainPhone}</span>}
+                                    <span>Roster: {team.members?.length || 1}/{team.maxMembers}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleCopyTeamRoster(team)}
+                                    className="px-2.5 py-1 rounded bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-semibold hover:bg-slate-100"
+                                  >
+                                    Copy Roster
+                                  </button>
+                                  {team.captainPhone && (
+                                    <a
+                                      href={`https://wa.me/${team.captainPhone.replace(/\D/g, "")}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-2 py-1 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-semibold hover:bg-emerald-100 flex items-center gap-1"
+                                    >
+                                      <MessageCircle className="h-3 w-3 text-emerald-600" />
+                                      <span>WA</span>
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -863,6 +1796,7 @@ export default function OrganizerDashboardPage() {
                                 tournamentId: t._id,
                                 roomId: t.matchRoomCredentials?.roomId || "",
                                 roomPassword: t.matchRoomCredentials?.roomPassword || "",
+                                youtubeStreamUrl: t.youtubeStreamUrl || t.streamUrl || "",
                               });
                               setActiveTab("room_credentials");
                             }}
@@ -1100,19 +2034,74 @@ export default function OrganizerDashboardPage() {
                     className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900 font-mono"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    End Game Screenshot Evidence URL *
+              {/* End Game Screenshot Evidence: Upload or URL */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    End Game Screenshot Evidence *
                   </label>
-                  <input
-                    type="url"
-                    required
-                    value={resultForm.evidenceUrl}
-                    onChange={(e) => setResultForm({ ...resultForm, evidenceUrl: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900"
-                  />
+                  <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[11px] font-medium">
+                    <button
+                      type="button"
+                      onClick={() => setEvidenceUploadMode("upload")}
+                      className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                        evidenceUploadMode === "upload"
+                          ? "bg-white text-emerald-700 shadow-xs font-semibold"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <Upload className="h-3 w-3" />
+                      <span>Upload Screenshot</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEvidenceUploadMode("url")}
+                      className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                        evidenceUploadMode === "url"
+                          ? "bg-white text-emerald-700 shadow-xs font-semibold"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <LinkIcon className="h-3 w-3" />
+                      <span>Screenshot URL</span>
+                    </button>
+                  </div>
                 </div>
+
+                {evidenceUploadMode === "upload" ? (
+                  <ImageDropzone
+                    value={resultForm.evidenceUrl}
+                    onChange={(url) => setResultForm({ ...resultForm, evidenceUrl: url })}
+                    aspectRatio="video"
+                    label=""
+                    hint="Upload end-game leaderboard screenshot, drag & drop, or paste (Ctrl+V)"
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      type="url"
+                      required
+                      placeholder="https://..."
+                      value={resultForm.evidenceUrl}
+                      onChange={(e) => setResultForm({ ...resultForm, evidenceUrl: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900"
+                    />
+                    {resultForm.evidenceUrl && (
+                      <div className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50 max-h-40 flex items-center justify-center">
+                        <img
+                          src={resultForm.evidenceUrl}
+                          alt="Screenshot Evidence Preview"
+                          className="max-h-40 w-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1173,6 +2162,7 @@ export default function OrganizerDashboardPage() {
                       tournamentId: e.target.value,
                       roomId: selTour?.matchRoomCredentials?.roomId || "",
                       roomPassword: selTour?.matchRoomCredentials?.roomPassword || "",
+                      youtubeStreamUrl: selTour?.youtubeStreamUrl || selTour?.streamUrl || "",
                     });
                   }}
                   className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900 bg-white"
@@ -1213,6 +2203,23 @@ export default function OrganizerDashboardPage() {
                     className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900 font-mono font-bold"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <YoutubeIcon className="h-3.5 w-3.5 fill-red-600" />
+                  <span>YouTube Live Stream Link (Optional)</span>
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                  value={credentialForm.youtubeStreamUrl || ""}
+                  onChange={(e) => setCredentialForm({ ...credentialForm, youtubeStreamUrl: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900"
+                />
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Caster or observer live stream link displayed prominently on tournament page and spectator feeds.
+                </span>
               </div>
 
               <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">

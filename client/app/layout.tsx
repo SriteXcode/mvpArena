@@ -3,9 +3,9 @@ import { Suspense } from "react";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import AuthModal from "@/components/AuthModal";
 import ProfileProgressBanner from "@/components/ProfileProgressBanner";
-import ProfileCompletionModal from "@/components/ProfileCompletionModal";
+import ClientModals from "@/components/ClientModals";
+import Loader from "@/components/ui/Loader";
 import { AuthProvider } from "@/lib/context/AuthContext";
 import { ToastProvider } from "@/lib/context/ToastContext";
 
@@ -78,13 +78,18 @@ export default function RootLayout({
             </Suspense>
             <ProfileProgressBanner />
             <main className="flex-1">
-              <Suspense fallback={<div className="p-12 text-center text-xs text-zinc-500 font-mono">Loading Arena...</div>}>
+              <Suspense
+                fallback={
+                  <div className="min-h-[50vh] w-full flex items-center justify-center p-8">
+                    <Loader variant="radar" size="md" label="Entering Arena..." />
+                  </div>
+                }
+              >
                 {children}
               </Suspense>
             </main>
             <Footer />
-            <AuthModal />
-            <ProfileCompletionModal />
+            <ClientModals />
           </ToastProvider>
         </AuthProvider>
 

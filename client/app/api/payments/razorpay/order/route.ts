@@ -30,6 +30,22 @@ export async function POST(req: NextRequest) {
 
     await connectToDatabase();
 
+    // Resolve tournament if tournamentId is a slug, token, or custom id
+    let resolvedTournamentId = tournamentId;
+    try {
+      const found = await Tournament.findOne({
+        $or: [
+          { slug: tournamentId },
+          { privateToken: tournamentId },
+        ],
+      });
+      if (found) {
+        resolvedTournamentId = found._id;
+      }
+    } catch {
+      // Continue with tournamentId
+    }
+
     // 1. Simulation / Sandbox Mode if API keys are not yet configured
     if (!keyId || !keySecret) {
       const mockOrderId = `order_sim_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
@@ -37,14 +53,14 @@ export async function POST(req: NextRequest) {
       try {
         await Payment.create({
           user: auth.userId,
-          tournament: tournamentId,
+          tournament: resolvedTournamentId || tournamentId,
           razorpayOrderId: mockOrderId,
           amount: Number(amount),
           currency: "INR",
           status: "created",
         });
-      } catch {
-        // Continue even if DB query fails in mock mode
+      } catch (e) {
+        console.warn("Could not record simulated payment in DB:", e);
       }
 
       return NextResponse.json({
@@ -80,14 +96,18 @@ export async function POST(req: NextRequest) {
     });
 
     // Record order in MongoDB
-    await Payment.create({
-      user: auth.userId,
-      tournament: tournamentId,
-      razorpayOrderId: order.id,
-      amount: Number(amount),
-      currency: order.currency || "INR",
-      status: "created",
-    });
+    try {
+      await Payment.create({
+        user: auth.userId,
+        tournament: resolvedTournamentId || tournamentId,
+        razorpayOrderId: order.id,
+        amount: Number(amount),
+        currency: order.currency || "INR",
+        status: "created",
+      });
+    } catch (e) {
+      console.warn("Could not record live payment order in DB:", e);
+    }
 
     return NextResponse.json({
       success: true,

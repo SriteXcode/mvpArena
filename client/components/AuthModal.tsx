@@ -12,7 +12,10 @@ import {
   Phone,
   KeyRound,
   ShieldCheck,
-  ArrowLeft
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  RotateCcw
 } from "lucide-react";
 import { useAuth } from "@/lib/context/AuthContext";
 
@@ -50,9 +53,24 @@ export default function AuthModal() {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotOtp, setForgotOtp] = useState("");
   const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [forgotOtpSent, setForgotOtpSent] = useState(false);
+  const [forgotOtpVerified, setForgotOtpVerified] = useState(false);
   const [sendingForgotOtp, setSendingForgotOtp] = useState(false);
+  const [verifyingForgotOtp, setVerifyingForgotOtp] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
+
+  const resetForgotState = () => {
+    setForgotOtpSent(false);
+    setForgotOtpVerified(false);
+    setForgotOtp("");
+    setForgotNewPassword("");
+    setForgotConfirmPassword("");
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+  };
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +103,7 @@ export default function AuthModal() {
     if (nextMode === viewMode) return;
     setDirection(nextMode === "register" ? "right" : "left");
     setViewMode(nextMode);
+    resetForgotState();
     if (nextMode !== "forgot_password") {
       openAuthModal(nextMode);
     }
@@ -205,9 +224,9 @@ export default function AuthModal() {
     }
   };
 
-  // Send Password Reset OTP
-  const handleSendForgotOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Send Password Reset OTP (WhatsApp)
+  const handleSendForgotOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!forgotPhone.trim() || forgotPhone.replace(/\D/g, "").length < 10) {
       setError("Please enter your 10-digit registered WhatsApp mobile number.");
       return;
@@ -223,6 +242,8 @@ export default function AuthModal() {
       const data = await res.json();
       if (data.success) {
         setForgotOtpSent(true);
+        setForgotOtpVerified(false);
+        setForgotOtp("");
         setSuccessMsg("Password reset OTP sent to your WhatsApp number!");
       } else {
         setError(data.error || "No account found with this WhatsApp number.");
@@ -234,51 +255,9 @@ export default function AuthModal() {
     }
   };
 
-  // Reset Password with OTP
-  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!forgotOtp.trim() || forgotOtp.trim().length !== 6) {
-      setError("Please enter the 6-digit OTP received on WhatsApp.");
-      return;
-    }
-    if (!forgotNewPassword || forgotNewPassword.length < 6) {
-      setError("New password must be at least 6 characters.");
-      return;
-    }
-    setError(null);
-    setResettingPassword(true);
-    try {
-      const res = await fetch("/api/auth/reset-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          whatsappNumber: forgotPhone,
-          otp: forgotOtp.trim(),
-          newPassword: forgotNewPassword,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSuccessMsg("Password reset successfully! Please sign in with your new password.");
-        setTimeout(() => {
-          handleModeChange("login");
-          setForgotOtpSent(false);
-          setForgotOtp("");
-          setForgotNewPassword("");
-        }, 1500);
-      } else {
-        setError(data.error || "Password reset failed. Invalid or expired OTP.");
-      }
-    } catch {
-      setError("Error resetting password.");
-    } finally {
-      setResettingPassword(false);
-    }
-  };
-
   // Send Email Password Reset
-  const handleSendForgotEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendForgotEmail = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!forgotEmail.trim() || !forgotEmail.includes("@")) {
       setError("Please enter a valid registered email address.");
       return;
@@ -294,6 +273,8 @@ export default function AuthModal() {
       const data = await res.json();
       if (data.success) {
         setForgotOtpSent(true);
+        setForgotOtpVerified(false);
+        setForgotOtp("");
         setSuccessMsg("Password reset code sent to your email!");
       } else {
         setError(data.error || "No account found with this email address.");
@@ -305,40 +286,93 @@ export default function AuthModal() {
     }
   };
 
-  // Reset Password via Email Code
-  const handleResetPasswordEmailSubmit = async (e: React.FormEvent) => {
+  // Verify OTP for Password Reset
+  const handleVerifyForgotOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanOtp = forgotOtp.trim();
+    if (!cleanOtp || cleanOtp.length !== 6) {
+      setError("Please enter the 6-digit verification code.");
+      return;
+    }
+    setError(null);
+    setVerifyingForgotOtp(true);
+    try {
+      const payload =
+        forgotChannel === "whatsapp"
+          ? { whatsappNumber: forgotPhone, otp: cleanOtp, purpose: "password_reset" }
+          : { email: forgotEmail.trim(), otp: cleanOtp, purpose: "password_reset" };
+
+      const res = await fetch("/api/auth/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setForgotOtpVerified(true);
+        setSuccessMsg("OTP verified! Now enter and confirm your new password below.");
+      } else {
+        setError(data.error || "Invalid verification code. Please try again.");
+      }
+    } catch {
+      setError("Network error verifying OTP code.");
+    } finally {
+      setVerifyingForgotOtp(false);
+    }
+  };
+
+  // Reset Password with New Password & Confirm Password (only after OTP is verified)
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotOtp.trim() || forgotOtp.trim().length !== 6) {
-      setError("Please enter the 6-digit code sent to your email.");
+    if (!forgotOtpVerified) {
+      setError("Please verify the OTP code before setting a new password.");
       return;
     }
     if (!forgotNewPassword || forgotNewPassword.length < 6) {
       setError("New password must be at least 6 characters.");
       return;
     }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setError("Passwords do not match. Please ensure both passwords match.");
+      return;
+    }
     setError(null);
     setResettingPassword(true);
     try {
-      const res = await fetch("/api/auth/reset-password/email", {
+      const endpoint =
+        forgotChannel === "whatsapp"
+          ? "/api/auth/reset-password"
+          : "/api/auth/reset-password/email";
+
+      const payload =
+        forgotChannel === "whatsapp"
+          ? {
+              whatsappNumber: forgotPhone,
+              otp: forgotOtp.trim(),
+              newPassword: forgotNewPassword,
+              confirmPassword: forgotConfirmPassword,
+            }
+          : {
+              email: forgotEmail.trim(),
+              otp: forgotOtp.trim(),
+              newPassword: forgotNewPassword,
+              confirmPassword: forgotConfirmPassword,
+            };
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: forgotEmail.trim(),
-          otp: forgotOtp.trim(),
-          newPassword: forgotNewPassword,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
-        setSuccessMsg("Password updated successfully! Please sign in with your new password.");
+        setSuccessMsg("Password reset successfully! Redirecting to sign in...");
         setTimeout(() => {
           handleModeChange("login");
-          setForgotOtpSent(false);
-          setForgotOtp("");
-          setForgotNewPassword("");
+          resetForgotState();
         }, 1500);
       } else {
-        setError(data.error || "Password reset failed. Invalid or expired code.");
+        setError(data.error || "Password reset failed. Invalid or expired OTP.");
       }
     } catch {
       setError("Error resetting password.");
@@ -349,7 +383,7 @@ export default function AuthModal() {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           closeAuthModal();
@@ -357,7 +391,7 @@ export default function AuthModal() {
       }}
     >
       <div 
-        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 shadow-2xl space-y-4 relative my-auto animate-in fade-in zoom-in-95 duration-150"
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 sm:p-7 shadow-2xl space-y-4 relative my-auto animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Dismiss Button */}
@@ -381,7 +415,11 @@ export default function AuthModal() {
           </h2>
           <p className="text-xs text-slate-600">
             {viewMode === "forgot_password"
-              ? "Reset account access via WhatsApp OTP verification."
+              ? forgotOtpVerified
+                ? "Set and confirm your new account password."
+                : forgotOtpSent
+                ? `Enter the 6-digit code sent to your ${forgotChannel === "whatsapp" ? "WhatsApp" : "email"}.`
+                : "Reset your account password via WhatsApp OTP or Email code."
               : viewMode === "login"
               ? "Access sanctioned lobbies, active brackets, and tournament payouts."
               : "Register your athlete credentials and enter competitive tournaments."}
@@ -447,12 +485,15 @@ export default function AuthModal() {
           {/* ================= FORGOT PASSWORD MODE ================= */}
           {viewMode === "forgot_password" ? (
             <div className="space-y-3 pt-1 text-xs">
-              {/* Channel Selector: WhatsApp vs Email */}
+              {/* Channel Selector: WhatsApp vs Email (Only shown before OTP is sent) */}
               {!forgotOtpSent && (
                 <div className="grid grid-cols-2 p-1 rounded-lg bg-slate-100 border border-slate-200 text-xs font-semibold">
                   <button
                     type="button"
-                    onClick={() => setForgotChannel("whatsapp")}
+                    onClick={() => {
+                      setForgotChannel("whatsapp");
+                      setError(null);
+                    }}
                     className={`py-1.5 rounded-md transition-all flex items-center justify-center gap-1.5 ${
                       forgotChannel === "whatsapp"
                         ? "bg-white text-emerald-700 shadow-xs font-bold"
@@ -464,7 +505,10 @@ export default function AuthModal() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setForgotChannel("email")}
+                    onClick={() => {
+                      setForgotChannel("email");
+                      setError(null);
+                    }}
                     className={`py-1.5 rounded-md transition-all flex items-center justify-center gap-1.5 ${
                       forgotChannel === "email"
                         ? "bg-white text-emerald-700 shadow-xs font-bold"
@@ -560,24 +604,17 @@ export default function AuthModal() {
                     </button>
                   </form>
                 )
-              ) : (
-                /* Step 2: Verify Code and Enter New Password */
-                <form
-                  onSubmit={
-                    forgotChannel === "whatsapp"
-                      ? handleResetPasswordSubmit
-                      : handleResetPasswordEmailSubmit
-                  }
-                  className="space-y-3"
-                >
+              ) : !forgotOtpVerified ? (
+                /* Step 2: Verify OTP Code (New Password and Confirm Password NOT visible yet) */
+                <form onSubmit={handleVerifyForgotOtp} className="space-y-3">
                   <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 flex items-center justify-between">
-                    <span>
+                    <span className="truncate mr-2">
                       Code sent to: <strong>{forgotChannel === "whatsapp" ? forgotPhone : forgotEmail}</strong>
                     </span>
                     <button
                       type="button"
-                      onClick={() => setForgotOtpSent(false)}
-                      className="text-emerald-700 font-semibold hover:underline"
+                      onClick={resetForgotState}
+                      className="text-emerald-700 font-semibold hover:underline shrink-0"
                     >
                       Change
                     </button>
@@ -594,29 +631,124 @@ export default function AuthModal() {
                         maxLength={6}
                         required
                         value={forgotOtp}
-                        onChange={(e) => setForgotOtp(e.target.value)}
+                        onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, ""))}
                         placeholder="e.g. 549182"
                         className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 font-mono text-center tracking-widest text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 shadow-xs text-sm font-bold"
                       />
                     </div>
+                    <div className="flex justify-between items-center mt-1.5">
+                      <span className="text-[11px] text-slate-500">
+                        Check your {forgotChannel === "whatsapp" ? "WhatsApp messages" : "inbox or spam folder"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={forgotChannel === "whatsapp" ? () => handleSendForgotOtp() : () => handleSendForgotEmail()}
+                        disabled={sendingForgotOtp}
+                        className="text-[11px] text-emerald-700 font-semibold hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-2.5 w-2.5" />
+                        <span>Resend OTP</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={verifyingForgotOtp || forgotOtp.trim().length !== 6}
+                    className="w-full py-2.5 rounded-lg bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 hover:bg-emerald-500 transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50"
+                  >
+                    {verifyingForgotOtp ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Verifying Code...</span>
+                      </>
+                    ) : (
+                      <>
+                        <KeyRound className="h-3.5 w-3.5" />
+                        <span>Verify OTP</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                /* Step 3: OTP Verified -> Set New Password and Confirm Password APPEAR NOW */
+                <form onSubmit={handleResetPasswordSubmit} className="space-y-3">
+                  <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-medium truncate mr-2">
+                      <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>
+                        Verified: <strong>{forgotChannel === "whatsapp" ? forgotPhone : forgotEmail}</strong>
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={resetForgotState}
+                      className="text-emerald-700 font-semibold text-[11px] hover:underline shrink-0"
+                    >
+                      Change
+                    </button>
                   </div>
 
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      New Account Password
+                      Set New Password
                     </label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                       <input
-                        type="password"
+                        type={showNewPassword ? "text" : "password"}
                         required
                         minLength={6}
                         value={forgotNewPassword}
                         onChange={(e) => setForgotNewPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 shadow-xs"
+                        className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-9 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 shadow-xs text-xs font-normal"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        tabIndex={-1}
+                      >
+                        {showNewPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <input
+                        type={showConfirmPassword ? "text" : "password"}
+                        required
+                        minLength={6}
+                        value={forgotConfirmPassword}
+                        onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-9 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 shadow-xs text-xs font-normal"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        tabIndex={-1}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                    {forgotConfirmPassword && forgotNewPassword !== forgotConfirmPassword && (
+                      <span className="text-[11px] text-rose-600 mt-1 block">
+                        Passwords do not match
+                      </span>
+                    )}
+                    {forgotConfirmPassword && forgotNewPassword === forgotConfirmPassword && (
+                      <span className="text-[11px] text-emerald-600 mt-1 flex items-center gap-1">
+                        <Check className="h-3 w-3" /> Passwords match
+                      </span>
+                    )}
                   </div>
 
                   <button

@@ -47,6 +47,7 @@ export interface MockTournament {
   tag?: "daily" | "weekend_mega" | "mega_prize" | "regular";
   isLiveStreamed?: boolean;
   streamUrl?: string;
+  youtubeStreamUrl?: string;
   streamViewerCount?: string;
   casterNames?: string;
   scoringRules: {
@@ -81,10 +82,12 @@ export interface MockLiveStream {
   casters: string;
   viewerCount: string;
   embedUrl: string;
+  streamUrl?: string;
   thumbnailUrl: string;
   isLive: boolean;
   phase: string;
   prizePool: number;
+  isReal?: boolean;
 }
 
 export interface MockLeaderboardTeam {
@@ -169,6 +172,9 @@ export const MOCK_TOURNAMENTS: MockTournament[] = [
     tournamentDate: "Today, 8:00 PM IST",
     status: "registration_open",
     rules: "1. No emulators or iPad view permitted.\n2. In-game screenshot of results mandatory within 15 mins.\n3. Room ID will be released 15 mins prior to match start.",
+    isLiveStreamed: true,
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
+    streamUrl: "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
     scoringRules: {
       firstPlacePoints: 15,
       killPoints: 1,
@@ -191,6 +197,9 @@ export const MOCK_TOURNAMENTS: MockTournament[] = [
     tournamentDate: "Tomorrow, 7:00 PM IST",
     status: "live",
     rules: "1. Mobile devices only.\n2. Gun properties active as per tournament room rules.\n3. Organizers hold final decision on disputes.",
+    isLiveStreamed: true,
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=5qap5aO4i9A",
+    streamUrl: "https://www.youtube.com/watch?v=5qap5aO4i9A",
     scoringRules: {
       firstPlacePoints: 12,
       killPoints: 1,
@@ -213,6 +222,9 @@ export const MOCK_TOURNAMENTS: MockTournament[] = [
     tournamentDate: "Sunday, 5:00 PM IST",
     status: "registration_open",
     rules: "Free to enter tournament for amateur and underdog squads. Must have verified BGMI Character ID.",
+    isLiveStreamed: true,
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=jfKfPfyJRdk",
+    streamUrl: "https://www.youtube.com/watch?v=jfKfPfyJRdk",
     scoringRules: {
       firstPlacePoints: 15,
       killPoints: 1,
@@ -303,7 +315,8 @@ export const MOCK_TOURNAMENTS: MockTournament[] = [
     rules: "Late night high-stakes scrims. Spectator stream active on YouTube.",
     tag: "daily",
     isLiveStreamed: true,
-    streamUrl: "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ",
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=jfKfPfyJRdk",
+    streamUrl: "https://www.youtube.com/watch?v=jfKfPfyJRdk",
     streamViewerCount: "5.8K",
     casterNames: "Mamba & Hydra",
     scoringRules: {
@@ -330,6 +343,8 @@ export const MOCK_TOURNAMENTS: MockTournament[] = [
     rules: "Daily competitive scrims running every evening at 8 PM. Instant UPI payout upon official result verification.",
     tag: "daily",
     isLiveStreamed: true,
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
+    streamUrl: "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
     streamViewerCount: "14.2K",
     casterNames: "Ocean Sharma & Mayavi",
     scoringRules: {
@@ -356,6 +371,8 @@ export const MOCK_TOURNAMENTS: MockTournament[] = [
     rules: "All-Day Weekend Marathon! 4 Stages: Qualifiers (11 AM), Quarters (2 PM), Semis (5 PM), Grand Finals (8 PM). Live on PlayArena Streams.",
     tag: "weekend_mega",
     isLiveStreamed: true,
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=5qap5aO4i9A",
+    streamUrl: "https://www.youtube.com/watch?v=5qap5aO4i9A",
     streamViewerCount: "38.6K",
     casterNames: "Aura Gaming & Pahadi",
     scoringRules: {
@@ -382,6 +399,8 @@ export const MOCK_TOURNAMENTS: MockTournament[] = [
     rules: "Mega Prize Pool Invitational! ₹2,50,000 for 1st Place, ₹1,25,000 for 2nd, ₹75,000 for 3rd, ₹50,000 for MVP Top Fragger. Direct UPI wire transfer within 3 hours.",
     tag: "mega_prize",
     isLiveStreamed: true,
+    youtubeStreamUrl: "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
+    streamUrl: "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
     streamViewerCount: "54.8K",
     casterNames: "Kratos & Ghatak",
     scoringRules: {
@@ -627,7 +646,8 @@ export const MOCK_LIVE_STREAMS: MockLiveStream[] = [
     tournamentId: "tour_bgmi_01",
     casters: "Ocean Sharma & Mayavi",
     viewerCount: "14,280",
-    embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=0",
+    embedUrl: "https://www.youtube.com/embed/yWbA1X18Qy4?autoplay=0",
+    streamUrl: "https://www.youtube.com/watch?v=yWbA1X18Qy4",
     thumbnailUrl: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80",
     isLive: true,
     phase: "Match 03 Live (Zone 4 Closing)",
@@ -642,7 +662,8 @@ export const MOCK_LIVE_STREAMS: MockLiveStream[] = [
     tournamentId: "tour_weekend_mega_01",
     casters: "Aura Gaming & Pahadi",
     viewerCount: "38,620",
-    embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=0",
+    embedUrl: "https://www.youtube.com/embed/5qap5aO4i9A?autoplay=0",
+    streamUrl: "https://www.youtube.com/watch?v=5qap5aO4i9A",
     thumbnailUrl: "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=1200&auto=format&fit=crop&q=80",
     isLive: true,
     phase: "Semifinals Bracket B (16 Squads)",
@@ -657,7 +678,8 @@ export const MOCK_LIVE_STREAMS: MockLiveStream[] = [
     tournamentId: "tour_mega_prize_01",
     casters: "Kratos & Ghatak",
     viewerCount: "54,800",
-    embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=0",
+    embedUrl: "https://www.youtube.com/embed/yWbA1X18Qy4?autoplay=0",
+    streamUrl: "https://www.youtube.com/watch?v=yWbA1X18Qy4",
     thumbnailUrl: "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=1200&auto=format&fit=crop&q=80",
     isLive: false,
     phase: "Pre-Show Broadcast (Starts 2:00 PM)",

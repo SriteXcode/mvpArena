@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import dynamic from "next/dynamic";
 import { 
   Trophy, 
   Search, 
@@ -15,10 +16,21 @@ import {
   Users,
   Sparkles
 } from "lucide-react";
-import LeaderboardPodium from "@/components/LeaderboardPodium";
-import MvpPodium, { MvpPlayer } from "@/components/MvpPodium";
+import LeaderboardSkeleton from "@/components/skeletons/LeaderboardSkeleton";
 import { MockLeaderboardTeam } from "@/lib/mockData";
 import { useToast } from "@/lib/context/ToastContext";
+import type { MvpPlayer } from "@/components/MvpPodium";
+
+// Dynamic Podium Loaders
+const LeaderboardPodium = dynamic(() => import("@/components/LeaderboardPodium"), {
+  loading: () => <LeaderboardSkeleton />,
+  ssr: false,
+});
+
+const MvpPodium = dynamic(() => import("@/components/MvpPodium"), {
+  loading: () => <LeaderboardSkeleton />,
+  ssr: false,
+});
 
 export default function LeaderboardsPage() {
   const toast = useToast();
@@ -193,10 +205,10 @@ export default function LeaderboardsPage() {
             </div>
 
             {/* Game Filter */}
-            <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
+            <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 border border-slate-200 shrink-0 overflow-x-auto no-scrollbar">
               <button
                 onClick={() => setSelectedGame("all")}
-                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all ${
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all shrink-0 ${
                   selectedGame === "all"
                     ? "bg-white text-slate-900 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -206,7 +218,7 @@ export default function LeaderboardsPage() {
               </button>
               <button
                 onClick={() => setSelectedGame("bgmi")}
-                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
                   selectedGame === "bgmi"
                     ? "bg-white text-emerald-700 border border-emerald-300 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -217,7 +229,7 @@ export default function LeaderboardsPage() {
               </button>
               <button
                 onClick={() => setSelectedGame("freefire")}
-                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
                   selectedGame === "freefire"
                     ? "bg-white text-rose-700 border border-rose-300 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -229,7 +241,7 @@ export default function LeaderboardsPage() {
             </div>
 
             {/* Search */}
-            <div className="relative w-full md:w-64">
+            <div className="relative w-full md:w-64 shrink-0">
               <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
               <input
                 type="text"
@@ -241,43 +253,44 @@ export default function LeaderboardsPage() {
             </div>
           </div>
 
-          {/* Squad Podium */}
-          {filteredTeams.length >= 3 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-              <LeaderboardPodium teams={filteredTeams.slice(0, 3)} />
-            </div>
-          )}
+          {/* Squad Standings Content & Podium */}
+          {loadingTeams ? (
+            <LeaderboardSkeleton />
+          ) : (
+            <>
+              {/* Squad Podium */}
+              {filteredTeams.length >= 3 && (
+                <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <Suspense fallback={<LeaderboardSkeleton />}>
+                    <LeaderboardPodium teams={filteredTeams.slice(0, 3)} />
+                  </Suspense>
+                </div>
+              )}
 
-          {/* Squad Table */}
-          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">
-                    <th className="py-3 px-4">Rank</th>
-                    <th className="py-3 px-4">Squad &amp; Leader Tag</th>
-                    <th className="py-3 px-4">Title</th>
-                    <th className="py-3 px-4 text-center">Matches</th>
-                    <th className="py-3 px-4 text-center">Placement Pts</th>
-                    <th className="py-3 px-4 text-center">Elims</th>
-                    <th className="py-3 px-4 text-right">Total Points</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {loadingTeams ? (
-                    <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-500">
-                        Loading tournament standings...
-                      </td>
-                    </tr>
-                  ) : filteredTeams.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-500">
-                        <Inbox className="h-8 w-8 mx-auto text-slate-400 mb-2" />
-                        No match standings recorded for this selection yet.
-                      </td>
-                    </tr>
-                  ) : (
+              {/* Squad Table */}
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="overflow-x-auto no-scrollbar">
+                  <table className="w-full text-left border-collapse min-w-[620px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">
+                        <th className="py-3 px-4">Rank</th>
+                        <th className="py-3 px-4">Squad &amp; Leader Tag</th>
+                        <th className="py-3 px-4">Title</th>
+                        <th className="py-3 px-4 text-center">Matches</th>
+                        <th className="py-3 px-4 text-center">Placement Pts</th>
+                        <th className="py-3 px-4 text-center">Elims</th>
+                        <th className="py-3 px-4 text-right">Total Points</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {filteredTeams.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-slate-500">
+                            <Inbox className="h-8 w-8 mx-auto text-slate-400 mb-2" />
+                            No match standings recorded for this selection yet.
+                          </td>
+                        </tr>
+                      ) : (
                     filteredTeams.map((team) => (
                       <tr key={`${team.rank}-${team.teamName}`} className="hover:bg-slate-50 transition-colors">
                         <td className="py-3 px-4 font-mono font-bold text-slate-900">
@@ -326,8 +339,10 @@ export default function LeaderboardsPage() {
               </table>
             </div>
           </div>
-        </div>
+        </>
       )}
+    </div>
+  )}
 
       {/* ================= MVP TOP FRAGGERS TAB ================= */}
       {activeTab === "mvp" && (
@@ -335,10 +350,10 @@ export default function LeaderboardsPage() {
           {/* MVP Controls: Timeframe (Daily/Monthly/Global) + Game Filter + Search */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             {/* Timeframe Selector (Daily / Monthly / Globally) */}
-            <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
+            <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 border border-slate-200 shrink-0 overflow-x-auto no-scrollbar">
               <button
                 onClick={() => setMvpTimeframe("daily")}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded text-xs font-semibold transition-all shrink-0 ${
                   mvpTimeframe === "daily"
                     ? "bg-white text-rose-700 shadow-xs border border-rose-200"
                     : "text-slate-600 hover:text-slate-900"
@@ -349,7 +364,7 @@ export default function LeaderboardsPage() {
               </button>
               <button
                 onClick={() => setMvpTimeframe("monthly")}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded text-xs font-semibold transition-all shrink-0 ${
                   mvpTimeframe === "monthly"
                     ? "bg-white text-indigo-700 shadow-xs border border-indigo-200"
                     : "text-slate-600 hover:text-slate-900"
@@ -360,7 +375,7 @@ export default function LeaderboardsPage() {
               </button>
               <button
                 onClick={() => setMvpTimeframe("global")}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded text-xs font-semibold transition-all shrink-0 ${
                   mvpTimeframe === "global"
                     ? "bg-white text-amber-700 shadow-xs border border-amber-200"
                     : "text-slate-600 hover:text-slate-900"
@@ -372,10 +387,10 @@ export default function LeaderboardsPage() {
             </div>
 
             {/* Game Selector */}
-            <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
+            <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 border border-slate-200 shrink-0 overflow-x-auto no-scrollbar">
               <button
                 onClick={() => setMvpGame("all")}
-                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all ${
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all shrink-0 ${
                   mvpGame === "all"
                     ? "bg-white text-slate-900 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -385,7 +400,7 @@ export default function LeaderboardsPage() {
               </button>
               <button
                 onClick={() => setMvpGame("bgmi")}
-                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
                   mvpGame === "bgmi"
                     ? "bg-white text-emerald-700 border border-emerald-300 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -396,7 +411,7 @@ export default function LeaderboardsPage() {
               </button>
               <button
                 onClick={() => setMvpGame("freefire")}
-                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
                   mvpGame === "freefire"
                     ? "bg-white text-rose-700 border border-rose-300 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -408,7 +423,7 @@ export default function LeaderboardsPage() {
             </div>
 
             {/* Search by Player IGN or Character UID */}
-            <div className="relative w-full md:w-64">
+            <div className="relative w-full md:w-64 shrink-0">
               <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
               <input
                 type="text"
@@ -420,64 +435,64 @@ export default function LeaderboardsPage() {
             </div>
           </div>
 
-          {/* Top 3 MVP Fraggers Podium */}
-          {mvpTopThree.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-              <MvpPodium
-                players={mvpTopThree}
-                timeframeLabel={
-                  mvpTimeframe === "daily"
-                    ? "Daily Match"
-                    : mvpTimeframe === "monthly"
-                    ? "Monthly"
-                    : "Global All-Time"
-                }
-              />
-            </div>
-          )}
+          {/* Top 3 MVP Fraggers Podium & Table */}
+          {loadingMvp ? (
+            <LeaderboardSkeleton />
+          ) : (
+            <>
+              {mvpTopThree.length > 0 && (
+                <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <Suspense fallback={<LeaderboardSkeleton />}>
+                    <MvpPodium
+                      players={mvpTopThree}
+                      timeframeLabel={
+                        mvpTimeframe === "daily"
+                          ? "Daily Match"
+                          : mvpTimeframe === "monthly"
+                          ? "Monthly"
+                          : "Global All-Time"
+                      }
+                    />
+                  </Suspense>
+                </div>
+              )}
 
-          {/* Individual Fraggers Table */}
-          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="p-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Flame className="h-4 w-4 text-rose-600" />
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-900 font-mono">
-                  Apex Fraggers Classification ({filteredMvpRankings.length} Athletes)
-                </span>
-              </div>
-              <span className="text-[10px] text-slate-500 font-mono">
-                Sorted by Total Eliminations
-              </span>
-            </div>
+              {/* Individual Fraggers Table */}
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="p-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Flame className="h-4 w-4 text-rose-600" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-900 font-mono">
+                      Apex Fraggers Classification ({filteredMvpRankings.length} Athletes)
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    Sorted by Total Eliminations
+                  </span>
+                </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">
-                    <th className="py-3 px-4">Rank</th>
-                    <th className="py-3 px-4">Athlete &amp; Character UID</th>
-                    <th className="py-3 px-4">Squad Affiliation</th>
-                    <th className="py-3 px-4">Title</th>
-                    <th className="py-3 px-4 text-center">Matches</th>
-                    <th className="py-3 px-4 text-center">Avg / Match</th>
-                    <th className="py-3 px-4 text-right">Most Kills</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {loadingMvp ? (
-                    <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-500">
-                        Aggregating player elimination telemetry...
-                      </td>
-                    </tr>
-                  ) : filteredMvpRankings.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-500">
-                        <Inbox className="h-8 w-8 mx-auto text-slate-400 mb-2" />
-                        No player kill records logged for this timeframe yet.
-                      </td>
-                    </tr>
-                  ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[620px] text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">
+                        <th className="py-3 px-4">Rank</th>
+                        <th className="py-3 px-4">Athlete &amp; Character UID</th>
+                        <th className="py-3 px-4">Squad Affiliation</th>
+                        <th className="py-3 px-4">Title</th>
+                        <th className="py-3 px-4 text-center">Matches</th>
+                        <th className="py-3 px-4 text-center">Avg / Match</th>
+                        <th className="py-3 px-4 text-right">Most Kills</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {filteredMvpRankings.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-slate-500">
+                            <Inbox className="h-8 w-8 mx-auto text-slate-400 mb-2" />
+                            No player kill records logged for this timeframe yet.
+                          </td>
+                        </tr>
+                      ) : (
                     filteredMvpRankings.map((player) => (
                       <tr key={`${player.rank}-${player.gameId}`} className="hover:bg-slate-50 transition-colors">
                         <td className="py-3 px-4 font-mono font-bold text-slate-900">
@@ -540,8 +555,10 @@ export default function LeaderboardsPage() {
               </table>
             </div>
           </div>
-        </div>
+        </>
       )}
+    </div>
+  )}
     </div>
   );
 }

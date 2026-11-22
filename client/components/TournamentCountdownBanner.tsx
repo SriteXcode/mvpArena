@@ -18,6 +18,14 @@ import {
 import { MockTournament } from "@/lib/mockData";
 import { useToast } from "@/lib/context/ToastContext";
 
+function YoutubeIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+    </svg>
+  );
+}
+
 interface TournamentCountdownBannerProps {
   tournament: MockTournament;
   registration: any;
@@ -241,6 +249,20 @@ export default function TournamentCountdownBanner({
               </div>
 
               <div className="md:col-span-7 flex flex-wrap items-center justify-end gap-2.5">
+                <a
+                  href={(tournament as any).youtubeStreamUrl || (tournament as any).streamUrl || "#official-stream"}
+                  target={(tournament as any).youtubeStreamUrl || (tournament as any).streamUrl ? "_blank" : undefined}
+                  rel={(tournament as any).youtubeStreamUrl || (tournament as any).streamUrl ? "noopener noreferrer" : undefined}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping"></span>
+                  <YoutubeIcon className="h-3.5 w-3.5 fill-white" />
+                  <span>View Live Match Stream</span>
+                  {((tournament as any).youtubeStreamUrl || (tournament as any).streamUrl) && (
+                    <ExternalLink className="h-3 w-3 opacity-80" />
+                  )}
+                </a>
+
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(universalLink);
@@ -423,13 +445,25 @@ export default function TournamentCountdownBanner({
                   Open your game, enter <strong>Custom Match</strong>, input Room ID and Password, and sit in your squad&apos;s assigned slot.
                 </p>
 
-                <Link
-                  href="/matches/match_01"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm transition-all shadow-md shrink-0 text-center justify-center"
-                >
-                  <span>Enter Match Lobby</span>
-                  <ExternalLink className="h-4 w-4" />
-                </Link>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <a
+                    href={(tournament as any).youtubeStreamUrl || (tournament as any).streamUrl || "#official-stream"}
+                    target={(tournament as any).youtubeStreamUrl || (tournament as any).streamUrl ? "_blank" : undefined}
+                    rel={(tournament as any).youtubeStreamUrl || (tournament as any).streamUrl ? "noopener noreferrer" : undefined}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm transition-all shadow-md shrink-0 text-center justify-center cursor-pointer"
+                  >
+                    <YoutubeIcon className="h-4 w-4 fill-white" />
+                    <span>View Live Match Stream</span>
+                  </a>
+
+                  <Link
+                    href="/matches/match_01"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm transition-all shadow-md shrink-0 text-center justify-center"
+                  >
+                    <span>Enter Match Lobby</span>
+                    <ExternalLink className="h-4 w-4" />
+                  </Link>
+                </div>
               </div>
             </div>
 

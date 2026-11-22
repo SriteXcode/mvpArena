@@ -16,6 +16,7 @@ import {
   Filter
 } from "lucide-react";
 import TournamentCard from "@/components/TournamentCard";
+import TournamentCardSkeleton from "@/components/skeletons/TournamentCardSkeleton";
 import { MockTournament } from "@/lib/mockData";
 import { useToast } from "@/lib/context/ToastContext";
 
@@ -35,6 +36,8 @@ interface TournamentApiItem {
   format: "solo" | "duo" | "squad";
   organizer?: { orgName?: string };
   bannerUrl?: string;
+  streamUrl?: string;
+  youtubeStreamUrl?: string;
   entryFee: number;
   prizePool: number;
   maxSlots: number;
@@ -95,6 +98,7 @@ function getDateCategory(dateStr: string): "today" | "tomorrow" | "upcoming" {
 export default function TournamentsPage() {
   const toast = useToast();
   const [tournaments, setTournaments] = useState<MockTournament[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Filter States
   const [selectedGame, setSelectedGame] = useState<GameFilter>("all");
@@ -135,7 +139,9 @@ export default function TournamentsPage() {
             status: t.status,
             rules: t.rules,
             tag: t.tag,
-            isLiveStreamed: t.isLiveStreamed,
+            isLiveStreamed: Boolean(t.isLiveStreamed || t.streamUrl || t.youtubeStreamUrl),
+            streamUrl: t.streamUrl || t.youtubeStreamUrl || "",
+            youtubeStreamUrl: t.youtubeStreamUrl || t.streamUrl || "",
             scoringRules: {
               firstPlacePoints: 15,
               killPoints: 1,
@@ -148,6 +154,9 @@ export default function TournamentsPage() {
       })
       .catch(() => {
         toast.error("Could not fetch tournaments from the database.", "Data Notice");
+      })
+      .finally(() => {
+        setIsLoading(false);
       });
   }, []);
 
@@ -550,8 +559,10 @@ export default function TournamentsPage() {
         </div>
       )}
 
-      {/* Tournament Cards Grid or Empty State */}
-      {filteredTournaments.length === 0 ? (
+      {/* Tournament Cards Grid, Skeleton Loading, or Empty State */}
+      {isLoading ? (
+        <TournamentCardSkeleton count={8} />
+      ) : filteredTournaments.length === 0 ? (
         <div className="p-12 text-center rounded-2xl border border-dashed border-slate-300 bg-white space-y-3 shadow-xs">
           <div className="h-10 w-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto border border-slate-200">
             <Filter className="h-5 w-5" />

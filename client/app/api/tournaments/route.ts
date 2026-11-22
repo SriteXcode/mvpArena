@@ -69,9 +69,18 @@ export async function POST(request: Request) {
       format: body.format || "squad",
       organizer: organizer?._id,
       bannerUrl: body.bannerUrl || "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800",
+      streamUrl: body.streamUrl || body.youtubeStreamUrl || "",
+      youtubeStreamUrl: body.youtubeStreamUrl || body.streamUrl || "",
       description: body.description || "Official tournament hosted on PlayArena",
       entryFee: Number(body.entryFee) || 0,
       prizePool: Number(body.prizePool) || 10000,
+      prizeDistribution: Array.isArray(body.prizeDistribution) && body.prizeDistribution.length > 0
+        ? body.prizeDistribution
+        : [
+            { rank: "1st Place (Champion)", reward: Math.round((Number(body.prizePool) || 10000) * 0.5), percentage: 50 },
+            { rank: "2nd Place (Runner-Up)", reward: Math.round((Number(body.prizePool) || 10000) * 0.3), percentage: 30 },
+            { rank: "3rd Place (2nd Runner-Up)", reward: Math.round((Number(body.prizePool) || 10000) * 0.2), percentage: 20 },
+          ],
       maxSlots: Number(body.maxSlots) || 25,
       registeredSlots: 0,
       registrationStart: new Date(),
@@ -96,7 +105,8 @@ export async function POST(request: Request) {
         roomPassword: body.roomPassword || "",
         announcedAt: body.roomId ? new Date() : undefined,
       },
-      rules: body.rules || "Standard esports competitive guidelines apply. Emulators prohibited.",
+      rules: body.rules || "Standard esports competitive guidelines apply. Mobile devices only. Emulators prohibited.",
+      codeOfConduct: body.codeOfConduct || "Esports fair play policy applies. Toxicity, abusive language, cheating, and falsified results lead to instant disqualification.",
     });
 
     return NextResponse.json({ success: true, data: newTournament });

@@ -206,13 +206,13 @@ export default function HeroBanner({ onOpenShareModal }: HeroBannerProps) {
             <div className="space-y-1">
               <h1 
                 key={`title-${active.id}`}
-                className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white uppercase font-mono leading-none drop-shadow-md animate-in fade-in slide-in-from-left-4 duration-300"
+                className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white uppercase font-mono leading-tight drop-shadow-md animate-in fade-in slide-in-from-left-4 duration-300 break-words"
               >
                 {active.gameTitle}
               </h1>
               <p 
                 key={`sub-${active.id}`}
-                className="text-sm sm:text-base font-semibold text-emerald-400 font-mono tracking-wide uppercase pt-1 animate-in fade-in slide-in-from-left-4 duration-300 delay-75"
+                className="text-xs sm:text-sm md:text-base font-semibold text-emerald-400 font-mono tracking-wide uppercase pt-1 animate-in fade-in slide-in-from-left-4 duration-300 delay-75 break-words"
               >
                 {active.subtitle}
               </p>

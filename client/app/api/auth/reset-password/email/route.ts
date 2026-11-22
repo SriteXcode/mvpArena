@@ -9,11 +9,18 @@ export async function POST(req: NextRequest) {
   try {
     await connectToDatabase();
     const body = await req.json();
-    const { email, otp, newPassword } = body;
+    const { email, otp, newPassword, confirmPassword } = body;
 
     if (!email || !otp || !newPassword) {
       return NextResponse.json(
         { success: false, error: "Email, OTP code, and new password are required." },
+        { status: 400 }
+      );
+    }
+
+    if (confirmPassword && newPassword !== confirmPassword) {
+      return NextResponse.json(
+        { success: false, error: "Passwords do not match." },
         { status: 400 }
       );
     }

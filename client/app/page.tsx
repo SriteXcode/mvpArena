@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { 
   Flame, 
   ArrowRight,
@@ -15,14 +16,38 @@ import {
   Check
 } from "lucide-react";
 import TournamentCard from "@/components/TournamentCard";
-import LeaderboardPodium from "@/components/LeaderboardPodium";
-import ShareInviteModal from "@/components/ShareInviteModal";
 import HeroBanner from "@/components/HeroBanner";
-import HowItWorks from "@/components/HowItWorks";
-import PlatformFeaturesShowcase from "@/components/PlatformFeaturesShowcase";
-import LiveStreamHub from "@/components/LiveStreamHub";
+import { TournamentCardSkeletonSingle } from "@/components/skeletons/TournamentCardSkeleton";
+import StreamHubSkeleton from "@/components/skeletons/StreamHubSkeleton";
+import LeaderboardSkeleton from "@/components/skeletons/LeaderboardSkeleton";
+import Skeleton from "@/components/ui/Skeleton";
 import { MockTournament, MockLeaderboardTeam } from "@/lib/mockData";
 import { useToast } from "@/lib/context/ToastContext";
+
+// Dynamic Lazy-Loaded Below-The-Fold & Interactive Components
+const LiveStreamHub = dynamic(() => import("@/components/LiveStreamHub"), {
+  loading: () => <StreamHubSkeleton />,
+  ssr: false,
+});
+
+const LeaderboardPodium = dynamic(() => import("@/components/LeaderboardPodium"), {
+  loading: () => <LeaderboardSkeleton />,
+  ssr: false,
+});
+
+const PlatformFeaturesShowcase = dynamic(() => import("@/components/PlatformFeaturesShowcase"), {
+  loading: () => <div className="mx-auto max-w-7xl px-4 py-8"><Skeleton className="h-64 w-full rounded-2xl" /></div>,
+  ssr: true,
+});
+
+const HowItWorks = dynamic(() => import("@/components/HowItWorks"), {
+  loading: () => <div className="mx-auto max-w-7xl px-4 py-8"><Skeleton className="h-64 w-full rounded-2xl" /></div>,
+  ssr: true,
+});
+
+const ShareInviteModal = dynamic(() => import("@/components/ShareInviteModal"), {
+  ssr: false,
+});
 
 interface TournamentApiItem {
   _id?: string;
@@ -42,6 +67,8 @@ interface TournamentApiItem {
   rules: string;
   tag?: "daily" | "weekend_mega" | "mega_prize" | "regular";
   isLiveStreamed?: boolean;
+  streamUrl?: string;
+  youtubeStreamUrl?: string;
 }
 
 interface LeaderboardApiItem {
@@ -118,6 +145,8 @@ export default function HomePage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [tournaments, setTournaments] = useState<MockTournament[]>([]);
   const [leaderboards, setLeaderboards] = useState<MockLeaderboardTeam[]>([]);
+  const [isLoadingTournaments, setIsLoadingTournaments] = useState(true);
+  const [isLoadingLeaderboards, setIsLoadingLeaderboards] = useState(true);
 
   useEffect(() => {
     fetch("/api/tournaments")
@@ -154,7 +183,9 @@ export default function HomePage() {
               status: t.status,
               rules: t.rules,
               tag: t.tag || "daily",
-              isLiveStreamed: Boolean(t.isLiveStreamed),
+              isLiveStreamed: Boolean(t.isLiveStreamed || t.streamUrl || t.youtubeStreamUrl),
+              streamUrl: t.streamUrl || t.youtubeStreamUrl || "",
+              youtubeStreamUrl: t.youtubeStreamUrl || t.streamUrl || "",
               scoringRules: {
                 firstPlacePoints: 15,
                 killPoints: 1,
@@ -168,6 +199,9 @@ export default function HomePage() {
       })
       .catch(() => {
         toast.error("Could not fetch tournaments from server.", "Notice");
+      })
+      .finally(() => {
+        setIsLoadingTournaments(false);
       });
 
     fetch("/api/leaderboards")
@@ -191,7 +225,10 @@ export default function HomePage() {
           setLeaderboards([]);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        setIsLoadingLeaderboards(false);
+      });
   }, []);
 
   // Multi-Filter Logic
@@ -543,8 +580,14 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Tournaments Grid or Empty State */}
-        {filteredTournaments.length > 0 ? (
+        {/* Tournaments Grid or Skeleton Loading or Empty State */}
+        {isLoadingTournaments ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <TournamentCardSkeletonSingle key={i} />
+            ))}
+          </div>
+        ) : filteredTournaments.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {filteredTournaments.map((t) => (
               <TournamentCard key={t.id} tournament={t} />
@@ -573,13 +616,19 @@ export default function HomePage() {
       </section>
 
       {/* 5 Core Arena Features Showcase: Daily, Weekend Mega, Live Stream, Mega Prizes, Milestones */}
-      <PlatformFeaturesShowcase />
+      <Suspense fallback={<div className="mx-auto max-w-7xl px-4 py-8"><Skeleton className="h-64 w-full rounded-2xl" /></div>}>
+        <PlatformFeaturesShowcase />
+      </Suspense>
 
       {/* 7-Step Tournament Workflow Showcase */}
-      <HowItWorks />
+      <Suspense fallback={<div className="mx-auto max-w-7xl px-4 py-8"><Skeleton className="h-64 w-full rounded-2xl" /></div>}>
+        <HowItWorks />
+      </Suspense>
 
       {/* Official Live Esports Stadium Broadcast */}
-      <LiveStreamHub />
+      <Suspense fallback={<StreamHubSkeleton />}>
+        <LiveStreamHub />
+      </Suspense>
 
       {/* Podium & Weekly Standings */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full">
@@ -596,8 +645,12 @@ export default function HomePage() {
             </p>
           </div>
 
-          {leaderboards.length >= 3 ? (
-            <LeaderboardPodium teams={leaderboards} />
+          {isLoadingLeaderboards ? (
+            <LeaderboardSkeleton />
+          ) : leaderboards.length >= 3 ? (
+            <Suspense fallback={<LeaderboardSkeleton />}>
+              <LeaderboardPodium teams={leaderboards} />
+            </Suspense>
           ) : (
             <div className="p-8 text-center text-xs text-slate-500 rounded-xl bg-slate-50 border border-slate-200 max-w-lg mx-auto">
               Season 04 rankings will update live as soon as match results are certified.
@@ -616,10 +669,14 @@ export default function HomePage() {
         </div>
       </section>
 
-      <ShareInviteModal
-        isOpen={showShareModal}
-        onClose={() => setShowShareModal(false)}
-      />
+      {showShareModal && (
+        <Suspense fallback={null}>
+          <ShareInviteModal
+            isOpen={showShareModal}
+            onClose={() => setShowShareModal(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

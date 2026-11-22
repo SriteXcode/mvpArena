@@ -3,28 +3,40 @@ import connectToDatabase from "@/lib/mongodb";
 import OtpVerification from "@/models/OtpVerification";
 import { formatWhatsAppPhone } from "@/lib/whatsapp";
 
-// POST /api/auth/otp/verify - Verify 6-digit WhatsApp OTP
+// POST /api/auth/otp/verify - Verify 6-digit WhatsApp or Email OTP
 export async function POST(req: NextRequest) {
   try {
     await connectToDatabase();
     const body = await req.json();
-    const { whatsappNumber, otp, purpose = "registration" } = body;
+    const { whatsappNumber, email, otp, purpose = "registration" } = body;
 
-    if (!whatsappNumber || !otp) {
+    if (!whatsappNumber && !email) {
       return NextResponse.json(
-        { success: false, error: "WhatsApp phone number and 6-digit OTP are required." },
+        { success: false, error: "WhatsApp phone number or email is required." },
         { status: 400 }
       );
     }
 
-    const formatted = formatWhatsAppPhone(whatsappNumber);
+    if (!otp || otp.trim().length !== 6) {
+      return NextResponse.json(
+        { success: false, error: "A valid 6-digit OTP code is required." },
+        { status: 400 }
+      );
+    }
 
-    const record = await OtpVerification.findOne({
-      whatsappNumber: formatted,
+    let filter: Record<string, any> = {
       purpose,
-      verified: false,
       expiresAt: { $gt: new Date() },
-    }).sort({ createdAt: -1 });
+    };
+
+    if (email) {
+      filter.email = email.toLowerCase().trim();
+    } else if (whatsappNumber) {
+      const formatted = formatWhatsAppPhone(whatsappNumber);
+      filter.whatsappNumber = formatted;
+    }
+
+    const record = await OtpVerification.findOne(filter).sort({ createdAt: -1 });
 
     if (!record) {
       return NextResponse.json(
@@ -41,12 +53,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Mark as verified
-    record.verified = true;
-    await record.save();
+    if (!record.verified) {
+      record.verified = true;
+      await record.save();
+    }
 
     return NextResponse.json({
       success: true,
-      message: "WhatsApp number verified successfully!",
+      message: "Verification successful!",
     });
   } catch (error) {
     return NextResponse.json(
@@ -55,3 +69,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

@@ -1,8 +1,8 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IPayment extends Document {
-  user: mongoose.Types.ObjectId;
-  tournament: mongoose.Types.ObjectId;
+  user: any;
+  tournament: any;
   razorpayOrderId: string;
   razorpayPaymentId?: string;
   razorpaySignature?: string;
@@ -15,8 +15,8 @@ export interface IPayment extends Document {
 
 const PaymentSchema = new Schema<IPayment>(
   {
-    user: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    tournament: { type: Schema.Types.ObjectId, ref: "Tournament", required: true, index: true },
+    user: { type: Schema.Types.Mixed, required: true, index: true },
+    tournament: { type: Schema.Types.Mixed, required: true, index: true },
     razorpayOrderId: { type: String, required: true, unique: true, index: true },
     razorpayPaymentId: { type: String, default: "" },
     razorpaySignature: { type: String, default: "" },

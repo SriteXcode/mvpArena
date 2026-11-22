@@ -128,7 +128,7 @@ export default function ProfileCompletionModal() {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           closeCompletionModal();
@@ -136,7 +136,7 @@ export default function ProfileCompletionModal() {
       }}
     >
       <div 
-        className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 shadow-2xl space-y-5 relative my-auto animate-in fade-in zoom-in-95 duration-150"
+        className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 sm:p-7 shadow-2xl space-y-5 relative my-auto animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Dismiss Button */}
