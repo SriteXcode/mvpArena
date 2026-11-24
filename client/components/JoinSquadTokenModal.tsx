@@ -83,7 +83,7 @@ export default function JoinSquadTokenModal({
         body: JSON.stringify({
           token: squadToken.trim(),
           gameId: characterUid.trim(),
-          inGameName: inGameName.trim() || user?.name || user?.username || "Teammate",
+          inGameName: inGameName.trim(),
           username: user?.username,
           tournamentId,
         }),

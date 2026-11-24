@@ -38,16 +38,21 @@ export default function ProfileCompletionModal() {
       if (user.upiId) {
         setUpiId(user.upiId);
       }
-      if (user.gameProfiles && user.gameProfiles.length > 0) {
+      const existing = user.gameProfiles?.find((p: any) => p.game === game);
+      if (existing) {
+        setGameId(existing.gameId || "");
+        setInGameName(existing.inGameName || "");
+      } else if (user.gameProfiles && user.gameProfiles.length > 0) {
         const primary = user.gameProfiles[0];
         setGame(primary.game as "bgmi" | "freefire");
-        setGameId(primary.gameId);
-        setInGameName(primary.inGameName);
-      } else if (user.username) {
-        setInGameName(user.username);
+        setGameId(primary.gameId || "");
+        setInGameName(primary.inGameName || "");
+      } else {
+        setGameId("");
+        setInGameName("");
       }
     }
-  }, [user, completionModalOpen]);
+  }, [user, completionModalOpen, game]);
 
   // Handle escape key
   useEffect(() => {
@@ -85,7 +90,7 @@ export default function ProfileCompletionModal() {
         payload.gameProfile = {
           game,
           gameId: gameId.trim(),
-          inGameName: inGameName.trim() || user?.username || "Athlete",
+          inGameName: inGameName.trim(),
           verified: true,
         };
       }

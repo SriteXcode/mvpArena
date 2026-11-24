@@ -88,8 +88,8 @@ export async function POST(req: NextRequest) {
     // Fetch user's game profile if not provided
     const userDoc = await User.findById(auth.userId);
     const gameProfile = userDoc?.gameProfiles?.find((p: any) => p.game === (game || "bgmi"));
-    const primaryGameId = captainGameId || gameProfile?.gameId || "512984" + Math.floor(1000 + Math.random() * 9000);
-    const primaryIgn = captainIgn || gameProfile?.inGameName || auth.name;
+    const primaryGameId = captainGameId || gameProfile?.gameId || "";
+    const primaryIgn = captainIgn || gameProfile?.inGameName || "";
 
     const newTeam = await Team.create({
       name: name.trim(),

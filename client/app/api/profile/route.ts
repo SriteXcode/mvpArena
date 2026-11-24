@@ -154,7 +154,7 @@ export async function PUT(request: Request) {
       const updatedProfile = {
         game: body.gameProfile.game,
         gameId: String(body.gameProfile.gameId).trim(),
-        inGameName: String(body.gameProfile.inGameName || user.username).trim(),
+        inGameName: String(body.gameProfile.inGameName || "").trim(),
         verified: true,
       };
       if (existingIdx >= 0) {

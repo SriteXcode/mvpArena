@@ -54,9 +54,7 @@ function JoinContent() {
 
       if (matchingProfile) {
         if (!gameId) setGameId(matchingProfile.gameId || "");
-        if (!inGameName) setInGameName(matchingProfile.inGameName || authUser.name || "");
-      } else if (!inGameName) {
-        setInGameName(authUser.name || authUser.username || "");
+        if (!inGameName) setInGameName(matchingProfile.inGameName || "");
       }
     }
   }, [authUser, tournament.game]);

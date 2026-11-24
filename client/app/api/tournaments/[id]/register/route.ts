@@ -154,13 +154,31 @@ export async function POST(
     const rosterLockedAt = new Date(matchDate.getTime() - 10 * 60 * 1000);
     const isWithinTenMinutes = Date.now() >= rosterLockedAt.getTime();
 
+    // Resolve captain's in-game profile from userDoc if missing
+    let resolvedCaptainIgn = captainInGameName?.trim() || "";
+    let resolvedCaptainGameId = captainGameId?.trim() || "";
+    if (currentUser?.userId && (!resolvedCaptainIgn || !resolvedCaptainGameId)) {
+      try {
+        const userDoc = await User.findById(currentUser.userId).lean();
+        if (userDoc && (userDoc as any).gameProfiles) {
+          const matchProfile = ((userDoc as any).gameProfiles as any[]).find((p: any) => p.game?.toLowerCase() === tourneyDoc?.game?.toLowerCase()) || (userDoc as any).gameProfiles[0];
+          if (matchProfile) {
+            if (!resolvedCaptainIgn) resolvedCaptainIgn = matchProfile.inGameName || "";
+            if (!resolvedCaptainGameId) resolvedCaptainGameId = matchProfile.gameId || "";
+          }
+        }
+      } catch (err) {
+        console.warn("Could not query captain userDoc for game profile:", err);
+      }
+    }
+
     // Initial squad roster: Captain is slot 1
     const members: any[] = [
       {
         user: captainId && mongoose.Types.ObjectId.isValid(captainId) ? captainId : undefined,
         username: currentUser?.username || undefined,
-        gameId: captainGameId || "5129847291",
-        inGameName: captainInGameName || captainName,
+        gameId: resolvedCaptainGameId,
+        inGameName: resolvedCaptainIgn,
         role: "captain",
         status: "confirmed",
         joinedAt: new Date().toISOString(),

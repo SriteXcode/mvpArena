@@ -245,8 +245,8 @@ export default function TournamentDetailPage() {
         body: JSON.stringify({
           registrationId: pendingInvite.id,
           action,
-          gameId: user?.gameProfiles?.[0]?.gameId || "",
-          inGameName: user?.gameProfiles?.[0]?.inGameName || user?.name || user?.username,
+          gameId: (user?.gameProfiles?.find((p: any) => p.game === tournament?.game) || user?.gameProfiles?.[0])?.gameId || "",
+          inGameName: (user?.gameProfiles?.find((p: any) => p.game === tournament?.game) || user?.gameProfiles?.[0])?.inGameName || "",
         }),
       });
       const data = await res.json();

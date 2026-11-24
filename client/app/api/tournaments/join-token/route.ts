@@ -99,7 +99,20 @@ export async function POST(req: Request) {
     }
 
     // 5. Look for reserved/pending slot
-    const finalInGameName = inGameName?.trim() || "Teammate";
+    let finalInGameName = inGameName?.trim() || "";
+    if (!finalInGameName && currentUser?.userId) {
+      try {
+        const userDoc = await User.findById(currentUser.userId).lean();
+        if (userDoc && (userDoc as any).gameProfiles) {
+          const matchProfile = ((userDoc as any).gameProfiles as any[]).find((p: any) => p.game?.toLowerCase() === "bgmi") || (userDoc as any).gameProfiles[0];
+          if (matchProfile?.inGameName) {
+            finalInGameName = matchProfile.inGameName;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not query member userDoc for game profile:", err);
+      }
+    }
     const finalUsername = currentUser?.username || username?.trim() || "";
     const memberUserId = currentUser?.userId && mongoose.Types.ObjectId.isValid(currentUser.userId)
       ? new mongoose.Types.ObjectId(currentUser.userId)

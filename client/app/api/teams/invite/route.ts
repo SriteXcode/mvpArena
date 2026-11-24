@@ -77,8 +77,7 @@ export async function POST(req: NextRequest) {
     const candidateIgn =
       inGameName?.trim() ||
       candidateUser?.gameProfiles?.find((p: { gameId: string; inGameName?: string }) => p.gameId === resolvedGameId)?.inGameName ||
-      candidateUser?.name ||
-      (username ? `@${username.trim().replace(/^@/, "")}` : `Athlete_${resolvedGameId.slice(-4)}`);
+      (resolvedGameId ? `Athlete_${resolvedGameId.slice(-4)}` : "");
 
     const memberStatus = status === "waiting_for_login" ? "waiting_for_login" : "active";
 

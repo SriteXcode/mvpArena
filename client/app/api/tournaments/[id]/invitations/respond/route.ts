@@ -98,7 +98,7 @@ export async function POST(
             userDoc.gameProfiles.push({
               game: tournamentDoc.game as "bgmi" | "freefire",
               gameId: member.gameId,
-              inGameName: member.inGameName || currentUser.name || currentUser.username,
+              inGameName: member.inGameName || "",
               verified: false,
             });
             await userDoc.save();

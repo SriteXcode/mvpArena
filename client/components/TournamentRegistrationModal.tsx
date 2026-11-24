@@ -48,18 +48,24 @@ export default function TournamentRegistrationModal({
 
   // Roster of teammates
   const maxSlots = tournament.format === "solo" ? 1 : tournament.format === "duo" ? 2 : 4;
-  const captainName = authUser?.name || "Team Captain";
+  const captainName = authUser?.name || authUser?.username || "Team Captain";
+  const captainProfile = authUser?.gameProfiles?.find(
+    (p: any) => p.game?.toLowerCase() === tournament.game?.toLowerCase()
+  ) || authUser?.gameProfiles?.[0];
+  const captainIgn = captainProfile?.inGameName || "";
+  const captainGameId = captainProfile?.gameId || "";
 
   const [invitedMembers, setInvitedMembers] = useState<any[]>([
     {
       id: authUser?.userId || "usr_captain",
       name: captainName,
-      inGameName: captainName,
-      gameId: "5129847291",
+      username: authUser?.username,
+      inGameName: captainIgn,
+      gameId: captainGameId,
       role: "captain",
       status: "confirmed",
       avatarUrl: authUser?.avatarUrl || "/avatar.png",
-      verified: true,
+      verified: !!captainProfile,
     },
   ]);
 
@@ -70,6 +76,30 @@ export default function TournamentRegistrationModal({
 
   // Persistent squad 1-click autofill
   const [savedTeam, setSavedTeam] = useState<any>(null);
+
+  React.useEffect(() => {
+    if (isOpen && authUser) {
+      const activeCaptainProfile = authUser.gameProfiles?.find(
+        (p: any) => p.game?.toLowerCase() === tournament.game?.toLowerCase()
+      ) || authUser.gameProfiles?.[0];
+
+      setInvitedMembers((prev) => {
+        const others = prev.filter((m) => m.role !== "captain");
+        const captainMember = {
+          id: authUser.userId || "usr_captain",
+          name: authUser.name || authUser.username || "Team Captain",
+          username: authUser.username,
+          inGameName: activeCaptainProfile?.inGameName || "",
+          gameId: activeCaptainProfile?.gameId || "",
+          role: "captain",
+          status: "confirmed",
+          avatarUrl: authUser.avatarUrl || "/avatar.png",
+          verified: !!activeCaptainProfile,
+        };
+        return [captainMember, ...others];
+      });
+    }
+  }, [isOpen, authUser, tournament.game]);
 
   React.useEffect(() => {
     if (isOpen && tournament.format !== "solo") {
@@ -264,14 +294,18 @@ export default function TournamentRegistrationModal({
 
   const completeRegistrationRequest = async (paymentId?: string) => {
     try {
+      const activeCaptainProfile = authUser?.gameProfiles?.find(
+        (p: any) => p.game?.toLowerCase() === tournament.game?.toLowerCase()
+      ) || authUser?.gameProfiles?.[0];
+
       const res = await fetch(`/api/tournaments/${tournament.id}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           teamName,
           format: tournament.format,
-          captainGameId: authUser?.gameProfiles?.[0]?.gameId || "5129847291",
-          captainInGameName: captainName,
+          captainGameId: activeCaptainProfile?.gameId || "",
+          captainInGameName: activeCaptainProfile?.inGameName || "",
           invitedMembers,
           matchStartTime: tournament.rawDate || new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
           razorpayPaymentId: paymentId,
@@ -429,11 +463,15 @@ export default function TournamentRegistrationModal({
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div>
                     <span className="text-slate-400 block text-[10px] font-mono uppercase">In-Game Name (IGN)</span>
-                    <strong className="text-slate-900 text-sm font-mono">{captainName}</strong>
+                    <strong className="text-slate-900 text-sm font-mono">
+                      {captainIgn || <span className="text-amber-600 font-normal">Not configured</span>}
+                    </strong>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px] font-mono uppercase">Character UID</span>
-                    <strong className="text-slate-900 text-sm font-mono">{"5129847291"}</strong>
+                    <strong className="text-slate-900 text-sm font-mono">
+                      {captainGameId || <span className="text-amber-600 font-normal">Not configured</span>}
+                    </strong>
                   </div>
                 </div>
               </div>
@@ -717,9 +755,7 @@ export default function TournamentRegistrationModal({
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-xs font-bold text-slate-900 truncate">
-                                {member.role === "captain"
-                                  ? (member.inGameName || member.name)
-                                  : (member.username ? `@${member.username}` : (member.inGameName || member.name))}
+                                {member.username ? `@${member.username}` : (member.name || "Athlete")}
                               </span>
                               {member.role === "captain" && (
                                 <span className="text-[9px] font-mono px-1 rounded bg-slate-100 text-slate-600 font-bold uppercase">
@@ -740,15 +776,15 @@ export default function TournamentRegistrationModal({
                               )}
                             </div>
                             <span className="text-[11px] font-mono text-slate-400 block truncate">
-                              {member.role === "captain"
-                                ? `UID: ${member.gameId}`
-                                : member.inGameName
-                                ? `IGN: ${member.inGameName} (UID: ${member.gameId})`
+                              {member.inGameName
+                                ? `IGN: ${member.inGameName} (UID: ${member.gameId || "N/A"})`
                                 : member.gameId
                                 ? `UID: ${member.gameId}`
                                 : isPending
                                 ? "Pending athlete acceptance"
-                                : "Slot reserved • Waiting for login"}
+                                : isWaiting
+                                ? "Slot reserved • Waiting for login"
+                                : "IGN / UID not linked"}
                             </span>
                           </div>
                         </div>
