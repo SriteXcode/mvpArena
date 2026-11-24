@@ -13,10 +13,12 @@ import {
   Lock, 
   ExternalLink,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Bell
 } from "lucide-react";
 import { MockTournament } from "@/lib/mockData";
 import { useToast } from "@/lib/context/ToastContext";
+import { registerBrowserPush } from "@/lib/pushClient";
 
 function YoutubeIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
@@ -38,11 +40,12 @@ export default function TournamentCountdownBanner({
   onRosterUpdated,
 }: TournamentCountdownBannerProps) {
   const toast = useToast();
-  // Target cutoff time: 10 minutes before match kickoff
-  const defaultCutoff = new Date(Date.now() + 110 * 60 * 1000); // 1h 50m from now for demo
+  // Target cutoff time: Exactly 10 minutes before match kickoff
+  const matchTime = tournament?.tournamentDate ? new Date(tournament.tournamentDate).getTime() : 0;
+  const tenMinCutoff = matchTime > 0 ? matchTime - 10 * 60 * 1000 : 0;
   const targetTime = registration?.rosterLockedAt
     ? new Date(registration.rosterLockedAt).getTime()
-    : defaultCutoff.getTime();
+    : (tenMinCutoff > 0 ? tenMinCutoff : Date.now() + 10 * 60 * 1000);
 
   const [timeLeft, setTimeLeft] = useState<{
     hours: number;
@@ -50,8 +53,8 @@ export default function TournamentCountdownBanner({
     seconds: number;
     isLocked: boolean;
   }>({
-    hours: 1,
-    minutes: 50,
+    hours: 0,
+    minutes: 10,
     seconds: 0,
     isLocked: false,
   });
@@ -65,14 +68,34 @@ export default function TournamentCountdownBanner({
   const [joiningTeammate, setJoiningTeammate] = useState(false);
   const [joinMessage, setJoinMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  const [enablingPush, setEnablingPush] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+
+  const handleEnablePush = async () => {
+    setEnablingPush(true);
+    const res = await registerBrowserPush();
+    setEnablingPush(false);
+    if (res.success) {
+      setPushEnabled(true);
+      toast.success("Device push alerts active! You'll be alerted the instant Room details unlock 10m before match.", "Push Alerts Enabled");
+    } else {
+      toast.info(res.error || "Please allow notifications in your browser to receive match alerts.", "Notifications");
+    }
+  };
+
   // Real-time countdown timer tick
   useEffect(() => {
+    let triggeredRefresh = false;
     const calculateTime = () => {
       const now = Date.now();
       const diff = targetTime - now;
 
       if (diff <= 0) {
         setTimeLeft({ hours: 0, minutes: 0, seconds: 0, isLocked: true });
+        if (!triggeredRefresh) {
+          triggeredRefresh = true;
+          onRosterUpdated?.();
+        }
         return;
       }
 
@@ -86,7 +109,16 @@ export default function TournamentCountdownBanner({
     calculateTime();
     const interval = setInterval(calculateTime, 1000);
     return () => clearInterval(interval);
-  }, [targetTime]);
+  }, [targetTime, onRosterUpdated]);
+
+  const activeRoomId =
+    (tournament as any)?.matchRoomCredentials?.roomId ||
+    registration?.roomCredentials?.roomId ||
+    "";
+  const activePassword =
+    (tournament as any)?.matchRoomCredentials?.roomPassword ||
+    registration?.roomCredentials?.roomPassword ||
+    "";
 
   const squadToken = registration?.squadToken || "SQ-8F29A";
   const teamName = registration?.teamName || "Team SoulFire";
@@ -284,6 +316,40 @@ export default function TournamentCountdownBanner({
               </div>
             </div>
 
+            {/* Encrypted Credentials Indicator (Phase 1) */}
+            <div className="p-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+                  <Lock className="h-4 w-4" />
+                </div>
+                <div>
+                  <span className="font-bold text-slate-900 block font-mono uppercase text-[11px] tracking-wider">
+                    Room ID &amp; Password Encrypted
+                  </span>
+                  <span>Credentials are locked and will be revealed here exactly 10 minutes before kickoff.</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleEnablePush}
+                  disabled={enablingPush || pushEnabled}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer ${
+                    pushEnabled
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                      : "bg-white hover:bg-slate-100 text-slate-800 border border-slate-300"
+                  }`}
+                >
+                  <Bell className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>{pushEnabled ? "Push Alerts Active ✅" : enablingPush ? "Enabling..." : "Notify Device on Reveal 🔔"}</span>
+                </button>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-[11px] font-bold shrink-0">
+                  <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Unlocks in {String(timeLeft.hours).padStart(2, "0")}:{String(timeLeft.minutes).padStart(2, "0")}:{String(timeLeft.seconds).padStart(2, "0")}</span>
+                </div>
+              </div>
+            </div>
+
             {/* Live Squad Roster Grid */}
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs font-mono text-slate-500 uppercase tracking-wider">
@@ -387,58 +453,72 @@ export default function TournamentCountdownBanner({
                     Official Custom Match Credentials Unlocked
                   </span>
                 </div>
-                <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
-                  Delivered via WhatsApp
+                <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <Bell className="h-3 w-3" />
+                  <span>Dispatched to Device Push &amp; WhatsApp</span>
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Room ID */}
-                <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-slate-400 block font-semibold">
-                      Custom Room ID
-                    </span>
-                    <strong className="text-xl sm:text-2xl font-bold font-mono text-slate-900">
-                      882910
-                    </strong>
+              {activeRoomId ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Room ID */}
+                  <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-mono uppercase text-slate-400 block font-semibold">
+                        Custom Room ID
+                      </span>
+                      <strong className="text-xl sm:text-2xl font-bold font-mono text-slate-900">
+                        {activeRoomId}
+                      </strong>
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(activeRoomId);
+                        setCopiedRoomId(true);
+                        toast.info(`Room ID (${activeRoomId}) copied to clipboard`, "Lobby Credentials");
+                        setTimeout(() => setCopiedRoomId(false), 2000);
+                      }}
+                      className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                      title="Copy Room ID"
+                    >
+                      {copiedRoomId ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText("882910");
-                      setCopiedRoomId(true);
-                      setTimeout(() => setCopiedRoomId(false), 2000);
-                    }}
-                    className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                    title="Copy Room ID"
-                  >
-                    {copiedRoomId ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-                  </button>
-                </div>
 
-                {/* Room Password */}
-                <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-slate-400 block font-semibold">
-                      Room Password
-                    </span>
-                    <strong className="text-xl sm:text-2xl font-bold font-mono text-emerald-700">
-                      play99
-                    </strong>
+                  {/* Room Password */}
+                  <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-mono uppercase text-slate-400 block font-semibold">
+                        Room Password
+                      </span>
+                      <strong className="text-xl sm:text-2xl font-bold font-mono text-emerald-700">
+                        {activePassword || "No Pass"}
+                      </strong>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (!activePassword) return;
+                        navigator.clipboard.writeText(activePassword);
+                        setCopiedPassword(true);
+                        toast.info(`Room Password copied to clipboard`, "Lobby Credentials");
+                        setTimeout(() => setCopiedPassword(false), 2000);
+                      }}
+                      className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                      title="Copy Password"
+                    >
+                      {copiedPassword ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText("play99");
-                      setCopiedPassword(true);
-                      setTimeout(() => setCopiedPassword(false), 2000);
-                    }}
-                    className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                    title="Copy Password"
-                  >
-                    {copiedPassword ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-                  </button>
                 </div>
-              </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                  <div>
+                    <strong className="block font-bold">Lobby Preparation in Progress</strong>
+                    <span>The 10-minute entry window is open. The tournament organizer is generating custom room credentials and they will appear right here momentarily.</span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
                 <p className="text-xs text-slate-600">
@@ -457,7 +537,7 @@ export default function TournamentCountdownBanner({
                   </a>
 
                   <Link
-                    href="/matches/match_01"
+                    href={`/matches/${tournament.id || (tournament as any)._id || "match_01"}`}
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm transition-all shadow-md shrink-0 text-center justify-center"
                   >
                     <span>Enter Match Lobby</span>

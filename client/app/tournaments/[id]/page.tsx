@@ -269,12 +269,7 @@ export default function TournamentDetailPage() {
     }
   };
 
-  React.useEffect(() => {
-    if (tournamentId === "join-token") {
-      window.location.replace("/join");
-      return;
-    }
-
+  const fetchTournamentData = () => {
     let localStream = "";
     if (typeof window !== "undefined") {
       try {
@@ -343,7 +338,15 @@ export default function TournamentDetailPage() {
       .finally(() => {
         setIsLoading(false);
       });
+  };
 
+  React.useEffect(() => {
+    if (tournamentId === "join-token") {
+      window.location.replace("/join");
+      return;
+    }
+
+    fetchTournamentData();
     fetchRegistration();
     fetchInvitations();
   }, [tournamentId, user]);
@@ -560,7 +563,10 @@ export default function TournamentDetailPage() {
         <TournamentCountdownBanner
           tournament={tournament}
           registration={registration}
-          onRosterUpdated={fetchRegistration}
+          onRosterUpdated={() => {
+            fetchRegistration();
+            fetchTournamentData();
+          }}
         />
       )}
 

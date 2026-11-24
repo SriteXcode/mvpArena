@@ -5,6 +5,7 @@ import Tournament from "@/models/Tournament";
 import Match from "@/models/Match";
 import TournamentRegistration from "@/models/TournamentRegistration";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { dispatchRoomCredentialsPush } from "@/lib/webpush";
 import { requireRole } from "@/lib/auth";
 
 export async function POST(request: Request) {
@@ -92,12 +93,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // Deliver Room Credentials to all registered teams via WhatsApp if roomId is provided
+    // Deliver Room Credentials to all registered teams via WhatsApp only if within 10 minutes of match kickoff
     const activeTournamentId = tournamentId || match?.tournament || tournament?._id;
     let dispatchedCount = 0;
 
-    if (activeTournamentId && roomId && roomPassword) {
+    const matchTime = tournament?.tournamentDate ? new Date(tournament.tournamentDate).getTime() : 0;
+    const tenMinutesBefore = matchTime > 0 ? matchTime - 10 * 60 * 1000 : 0;
+    const isWithinTenMinutes = matchTime === 0 || Date.now() >= tenMinutesBefore;
+
+    if (activeTournamentId && roomId && roomPassword && isWithinTenMinutes) {
       try {
+        // Dispatch push notification to all registered athletes on their devices
+        dispatchRoomCredentialsPush({
+          tournamentId: activeTournamentId.toString(),
+          tournamentTitle: tournament?.title || "MVP Arena Championship",
+          roomId,
+          roomPassword,
+        }).catch((pushErr) => {
+          console.warn("[WebPush] Room credentials dispatch error:", pushErr);
+        });
+
         const registrations = await TournamentRegistration.find({
           tournament: activeTournamentId,
         }).populate("captain", "name username whatsappNumber");
@@ -134,8 +149,16 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Tournament credentials & live stream link updated! Dispatched to registered squad captains.`,
-      data: { tournament, match, dispatchedCount },
+      message: isWithinTenMinutes
+        ? `Tournament credentials & live stream link updated! Dispatched to ${dispatchedCount} registered squad captains.`
+        : `Room credentials saved securely! They will be revealed to registered players and dispatched on WhatsApp exactly 10 minutes before match kickoff.`,
+      data: {
+        tournament,
+        match,
+        dispatchedCount,
+        isWithinTenMinutes,
+        revealsAt: tenMinutesBefore > 0 ? new Date(tenMinutesBefore).toISOString() : null,
+      },
     });
   } catch (error) {
     return NextResponse.json(

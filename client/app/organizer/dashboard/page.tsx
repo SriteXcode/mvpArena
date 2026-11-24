@@ -41,7 +41,8 @@ import {
   ChevronUp,
   MessageCircle,
   Download,
-  Crown
+  Crown,
+  RotateCcw
 } from "lucide-react";
 import ImageDropzone from "@/components/ImageDropzone";
 import DashboardSkeleton from "@/components/skeletons/DashboardSkeleton";
@@ -174,8 +175,8 @@ export default function OrganizerDashboardPage() {
   const [teamStatusFilter, setTeamStatusFilter] = useState<"all" | "completed" | "free" | "pending">("all");
   const [copiedRosterTeamId, setCopiedRosterTeamId] = useState<string | null>(null);
 
-  // Tab 1 Form State: Create Tournament
-  const [createForm, setCreateForm] = useState({
+  // Tab 1 Form State: Create Tournament Defaults
+  const defaultCreateForm = {
     title: "",
     game: "bgmi" as "bgmi" | "freefire",
     format: "squad" as "solo" | "duo" | "squad",
@@ -191,12 +192,22 @@ export default function OrganizerDashboardPage() {
     description: "Official competitive tournament with automated standings and instant prize pool.",
     rules: "1. Device Policy: Mobile phones only (iOS / Android). Emulators, triggers, and iPad/tablets are strictly forbidden.\n2. Integrity: Cheating, teaming, hacking, or third-party config files will result in an immediate lifetime ban.\n3. Punctuality: Room credentials are dispatched 15 minutes before kick-off. Matches start on schedule.",
     codeOfConduct: "1. Fair Play: All participants must maintain esports integrity and respect referees and fellow competitors.\n2. Non-Toxic Environment: Abusive language, harassment, hate speech, or toxicity in lobbies will lead to disqualification.\n3. Disqualification & Forfeiture: Failing to verify results, submitting falsified screenshots, or intentional disconnects will forfeit prize entitlements.",
-  });
-  const [prizeRanks, setPrizeRanks] = useState<Array<{ rank: string; reward: number; percentage: number }>>([
+  };
+
+  const defaultPrizeRanks = [
     { rank: "1st Place (Champion)", reward: 7500, percentage: 50 },
     { rank: "2nd Place (Runner-Up)", reward: 4500, percentage: 30 },
     { rank: "3rd Place (2nd Runner-Up)", reward: 3000, percentage: 20 },
-  ]);
+  ];
+
+  const [createForm, setCreateForm] = useState(defaultCreateForm);
+  const [prizeRanks, setPrizeRanks] = useState<Array<{ rank: string; reward: number; percentage: number }>>(defaultPrizeRanks);
+
+  const handleResetCreateForm = () => {
+    setCreateForm(defaultCreateForm);
+    setPrizeRanks(defaultPrizeRanks);
+    toast.info("Tournament creation form has been reset to defaults.", "Form Reset");
+  };
   const [newPrivateToken, setNewPrivateToken] = useState<string | null>(null);
   const [bannerUploadMode, setBannerUploadMode] = useState<"upload" | "url">("upload");
   const [evidenceUploadMode, setEvidenceUploadMode] = useState<"upload" | "url">("upload");
@@ -398,10 +409,9 @@ export default function OrganizerDashboardPage() {
             }
           } catch {}
         }
-        setCreateForm({
-          ...createForm,
-          title: "",
-        });
+        // Reset tournament creation form completely to fresh defaults
+        setCreateForm(defaultCreateForm);
+        setPrizeRanks(defaultPrizeRanks);
       } else {
         toast.error(data.error || "Failed to create tournament.", "Creation Error");
       }
@@ -1163,13 +1173,24 @@ export default function OrganizerDashboardPage() {
               </div>
             </div>
 
-            <button
-              type="submit"
-              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Publish {createForm.visibility === "private" ? "Private" : "Public"} Tournament</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleResetCreateForm}
+                className="py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border border-slate-300 shadow-xs cursor-pointer"
+                title="Clear all fields and reset form"
+              >
+                <RotateCcw className="h-4 w-4 text-slate-500" />
+                <span>Reset Form</span>
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Publish {createForm.visibility === "private" ? "Private" : "Public"} Tournament</span>
+              </button>
+            </div>
           </form>
 
           {/* New Private Token Result */}
@@ -2230,6 +2251,11 @@ export default function OrganizerDashboardPage() {
                     className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs text-slate-900 font-mono font-bold"
                   />
                 </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200/60 text-[11px] text-emerald-900 flex items-center gap-2">
+                <Lock className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span><strong>Automated T-10m Release:</strong> You can publish credentials anytime. They will remain securely locked and will automatically unlock for registered players exactly 10 minutes before kickoff.</span>
               </div>
 
               <div>

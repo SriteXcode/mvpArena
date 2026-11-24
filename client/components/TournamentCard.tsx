@@ -48,14 +48,33 @@ export default function TournamentCard({ tournament }: TournamentCardProps) {
           </span>
         </div>
 
-        {/* Entry Tag */}
-        <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
-          {(tournament.isLiveStreamed || tournament.youtubeStreamUrl || tournament.streamUrl) && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-600 text-white shadow-xs">
+        {/* Top Actions & Entry Tag */}
+        <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
+          {(tournament.youtubeStreamUrl || tournament.streamUrl) ? (
+            <a
+              href={tournament.youtubeStreamUrl || tournament.streamUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm transition-transform hover:scale-105 cursor-pointer"
+              title="Watch Live Stream on YouTube"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping"></span>
-              STREAM
-            </span>
-          )}
+              <YoutubeIcon className="h-3 w-3 fill-white" />
+              <span>STREAM</span>
+            </a>
+          ) : tournament.isLiveStreamed ? (
+            <Link
+              href={`/tournaments/${tournament.id}#official-stream`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm transition-transform hover:scale-105 cursor-pointer"
+              title="Watch Live Stream Broadcast"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping"></span>
+              <YoutubeIcon className="h-3 w-3 fill-white" />
+              <span>STREAM</span>
+            </Link>
+          ) : null}
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
               tournament.entryFee === 0
@@ -144,47 +163,19 @@ export default function TournamentCard({ tournament }: TournamentCardProps) {
         </div>
 
         {/* Footer */}
-        <div className="mt-auto pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
-          <div className="flex items-center gap-1 text-[11px] text-slate-500 font-mono min-w-0">
-            <Clock className="h-3 w-3 shrink-0 text-slate-400" />
-            <span className="truncate">{tournament.tournamentDate}</span>
+        <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 text-xs text-slate-600 font-mono min-w-0">
+            <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <span className="font-semibold text-slate-700 truncate">{tournament.tournamentDate}</span>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-            {tournament.youtubeStreamUrl || tournament.streamUrl ? (
-              <a
-                href={tournament.youtubeStreamUrl || tournament.streamUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition-colors"
-                title="View Live Match Stream on YouTube"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping"></span>
-                <YoutubeIcon className="h-3 w-3 fill-white" />
-                <span>View Stream</span>
-              </a>
-            ) : (
-              <Link
-                href={`/tournaments/${tournament.id}#official-stream`}
-                onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-semibold shadow-2xs transition-colors"
-                title="View Live Match Stream Broadcast"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
-                <YoutubeIcon className="h-3 w-3 fill-red-600" />
-                <span>Stream</span>
-              </Link>
-            )}
-
-            <Link
-              href={`/tournaments/${tournament.id}`}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-white hover:bg-emerald-600 hover:border-emerald-600 transition-all shadow-xs"
-            >
-              <span>View Event</span>
-              <ArrowUpRight className="h-3 w-3 opacity-80" />
-            </Link>
-          </div>
+          <Link
+            href={`/tournaments/${tournament.id}`}
+            className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-white hover:bg-emerald-600 hover:border-emerald-600 transition-all shadow-xs shrink-0"
+          >
+            <span>View Event</span>
+            <ArrowUpRight className="h-3 w-3 opacity-80" />
+          </Link>
         </div>
       </div>
     </div>

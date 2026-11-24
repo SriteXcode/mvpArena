@@ -14,7 +14,8 @@ import {
   Loader2,
   AlertCircle,
   ExternalLink,
-  Play
+  Play,
+  Lock
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useToast } from "@/lib/context/ToastContext";
@@ -42,13 +43,17 @@ export default function MatchLobbyPage() {
     streamUrl?: string;
     tournamentId?: string;
     tournamentTitle?: string;
+    credentialsLocked?: boolean;
+    revealsAt?: string | null;
   }>({
-    roomId: "882910",
-    roomPassword: "play99",
-    status: "live",
+    roomId: "",
+    roomPassword: "",
+    status: "upcoming",
     streamUrl: "",
     tournamentId: "",
     tournamentTitle: "BGMI Pro Scrims Season 4",
+    credentialsLocked: false,
+    revealsAt: null,
   });
 
   useEffect(() => {
@@ -81,12 +86,14 @@ export default function MatchLobbyPage() {
             "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1";
 
           setMatchData({
-            roomId: res.data.roomId || "882910",
-            roomPassword: res.data.roomPassword || "play99",
+            roomId: res.data.roomId || "",
+            roomPassword: res.data.roomPassword || "",
             status: res.data.status || "live",
             streamUrl: normalizeStreamUrl(rawStream),
             tournamentId: tourneyId,
             tournamentTitle: t?.title || "BGMI Pro Scrims Season 4",
+            credentialsLocked: Boolean(res.data.credentialsLocked),
+            revealsAt: res.data.revealsAt || null,
           });
         }
       })
@@ -222,48 +229,68 @@ export default function MatchLobbyPage() {
               Custom Lobby Credentials
             </h2>
           </div>
-          <span className="text-[10px] text-slate-400 font-mono">Encrypted Match Token</span>
+          <span className="text-[10px] text-slate-400 font-mono">
+            {matchData.credentialsLocked ? "Locked (T-10m)" : "Encrypted Match Token"}
+          </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Room ID */}
-          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
-            <span className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">
-              Lobby Identifier (Room ID)
-            </span>
-            <div className="flex items-center justify-between mt-1">
-              <span className="font-mono text-xl font-bold text-slate-900 tracking-wider">
-                {matchData.roomId}
-              </span>
-              <button
-                onClick={copyRoomId}
-                className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-all border border-slate-300 shadow-xs"
-              >
-                {copiedRoom ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                <span>{copiedRoom ? "Copied" : "Copy"}</span>
-              </button>
+        {matchData.credentialsLocked || !matchData.roomId ? (
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-slate-200 flex items-center justify-center text-slate-600 shrink-0">
+                <Lock className="h-4 w-4" />
+              </div>
+              <div>
+                <strong className="block text-slate-900 font-semibold">Custom Room ID & Password Locked</strong>
+                <span>Credentials reveal automatically to registered squads exactly 10 minutes prior to kickoff.</span>
+              </div>
+            </div>
+            <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[11px] font-bold">
+              <Clock className="h-3.5 w-3.5 text-amber-600" />
+              <span>Unlocks 10m before match</span>
             </div>
           </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Room ID */}
+            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+              <span className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">
+                Lobby Identifier (Room ID)
+              </span>
+              <div className="flex items-center justify-between mt-1">
+                <span className="font-mono text-xl font-bold text-slate-900 tracking-wider">
+                  {matchData.roomId}
+                </span>
+                <button
+                  onClick={copyRoomId}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-all border border-slate-300 shadow-xs cursor-pointer"
+                >
+                  {copiedRoom ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span>{copiedRoom ? "Copied" : "Copy"}</span>
+                </button>
+              </div>
+            </div>
 
-          {/* Password */}
-          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
-            <span className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">
-              Lobby Access Passcode
-            </span>
-            <div className="flex items-center justify-between mt-1">
-              <span className="font-mono text-xl font-bold text-emerald-700 tracking-wider">
-                {matchData.roomPassword}
+            {/* Password */}
+            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+              <span className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">
+                Lobby Access Passcode
               </span>
-              <button
-                onClick={copyPassword}
-                className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-all border border-slate-300 shadow-xs"
-              >
-                {copiedPass ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                <span>{copiedPass ? "Copied" : "Copy"}</span>
-              </button>
+              <div className="flex items-center justify-between mt-1">
+                <span className="font-mono text-xl font-bold text-emerald-700 tracking-wider">
+                  {matchData.roomPassword}
+                </span>
+                <button
+                  onClick={copyPassword}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-all border border-slate-300 shadow-xs cursor-pointer"
+                >
+                  {copiedPass ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span>{copiedPass ? "Copied" : "Copy"}</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-3.5 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
           <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />

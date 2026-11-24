@@ -294,6 +294,10 @@ export default function TournamentRegistrationModal({
       }
     } catch {
       // Fallback in-memory success
+      const matchTime = tournament.tournamentDate ? new Date(tournament.tournamentDate).getTime() : 0;
+      const tenMinCutoff = matchTime > 0 ? matchTime - 10 * 60 * 1000 : 0;
+      const isWithinTenMinutes = matchTime === 0 || Date.now() >= tenMinCutoff;
+
       const fallbackRecord = {
         tournamentId: tournament.id,
         teamName,
@@ -302,8 +306,13 @@ export default function TournamentRegistrationModal({
         members: invitedMembers,
         maxMembers: maxSlots,
         isEarlyLocked: true,
-        rosterLockedAt: new Date(Date.now() + 110 * 60 * 1000).toISOString(),
-        roomCredentials: { roomId: "882910", roomPassword: "play99" },
+        rosterLockedAt: (tenMinCutoff > 0 ? new Date(tenMinCutoff) : new Date(Date.now() + 10 * 60 * 1000)).toISOString(),
+        roomCredentials: isWithinTenMinutes && (tournament as any).matchRoomCredentials?.roomId
+          ? {
+              roomId: (tournament as any).matchRoomCredentials.roomId,
+              roomPassword: (tournament as any).matchRoomCredentials.roomPassword,
+            }
+          : undefined,
       };
       toast.success("Tournament registration locked! Squad token active.", "Registration Confirmed");
       onRegistrationSuccess(fallbackRecord);

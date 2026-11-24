@@ -40,4 +40,100 @@ export async function sendWebPush(
   }
 }
 
+export async function dispatchRoomCredentialsPush({
+  tournamentId,
+  tournamentTitle,
+  roomId,
+  roomPassword,
+}: {
+  tournamentId: string;
+  tournamentTitle: string;
+  roomId: string;
+  roomPassword: string;
+}): Promise<{ sentCount: number; userCount: number }> {
+  try {
+    const connectToDatabase = (await import("@/lib/mongodb")).default;
+    await connectToDatabase();
+
+    const TournamentRegistration = (await import("@/models/TournamentRegistration")).default;
+    const User = (await import("@/models/User")).default;
+    const Notification = (await import("@/models/Notification")).default;
+
+    // 1. Find all registrations for this tournament
+    const registrations = await TournamentRegistration.find({
+      tournament: tournamentId,
+    }).select("captain members").lean();
+
+    const userIds = new Set<string>();
+    for (const reg of registrations) {
+      if (reg.captain) {
+        userIds.add(reg.captain.toString());
+      }
+      if (Array.isArray(reg.members)) {
+        for (const m of reg.members) {
+          if (m?.user) {
+            userIds.add(m.user.toString());
+          }
+        }
+      }
+    }
+
+    if (userIds.size === 0) {
+      return { sentCount: 0, userCount: 0 };
+    }
+
+    // 2. Fetch users with push subscriptions
+    const users = await User.find({
+      _id: { $in: Array.from(userIds) },
+    }).select("_id pushSubscriptions").lean();
+
+    let sentCount = 0;
+    const payload: PushPayload = {
+      title: "🚨 Room Details Revealed!",
+      body: `Room ID: ${roomId} | Pass: ${roomPassword} for ${tournamentTitle}. Join your custom match now!`,
+      url: `/tournaments/${tournamentId}`,
+      tag: `room_creds_${tournamentId}`,
+    };
+
+    // 3. Dispatch web push to all user subscriptions
+    for (const u of users) {
+      if (Array.isArray(u.pushSubscriptions) && u.pushSubscriptions.length > 0) {
+        for (const sub of u.pushSubscriptions) {
+          if (sub?.endpoint && sub?.keys?.auth && sub?.keys?.p256dh) {
+            const ok = await sendWebPush(sub, payload);
+            if (ok) sentCount++;
+          }
+        }
+      }
+
+      // Also create persistent in-app Notification record
+      try {
+        await Notification.create({
+          recipient: u._id,
+          title: "🚨 Room Details Revealed!",
+          message: `Custom Room ID: ${roomId} and Password: ${roomPassword} have been revealed for ${tournamentTitle}. Join the match lobby now!`,
+          type: "match_credentials",
+          link: `/tournaments/${tournamentId}`,
+          channelsDispatched: {
+            socket: false,
+            webPush: Boolean(u.pushSubscriptions && u.pushSubscriptions.length > 0),
+            fcm: false,
+            whatsapp: false,
+          },
+        });
+      } catch (notifErr) {
+        console.warn("Failed to create in-app notification:", notifErr);
+      }
+    }
+
+    console.log(
+      `🔔 [WebPush] Dispatched room credentials to ${sentCount} device(s) across ${users.length} registered player(s) for tournament ${tournamentId}`
+    );
+    return { sentCount, userCount: users.length };
+  } catch (err) {
+    console.error("Error dispatching room credentials push notifications:", err);
+    return { sentCount: 0, userCount: 0 };
+  }
+}
+
 export default webpush;

@@ -116,6 +116,13 @@ export default function NewTournamentWizardPage() {
       const data = await res.json();
       if (data.success) {
         setPublished(true);
+        setTitle("");
+        setDescription("");
+        setYoutubeStreamUrl("");
+        setEntryFee(100);
+        setPrizePool(15000);
+        setMaxSlots(25);
+        setStep(1);
         setTimeout(() => {
           router.push("/organizer/dashboard");
         }, 1500);

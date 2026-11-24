@@ -59,9 +59,30 @@ export async function GET(
         }
 
         if (reg) {
+          const regObj: any = { ...reg };
+          const tourneyDoc = await Tournament.findById(id).select("tournamentDate matchRoomCredentials").lean();
+          const matchTime = tourneyDoc?.tournamentDate ? new Date(tourneyDoc.tournamentDate).getTime() : 0;
+          const tenMinCutoff = matchTime > 0 ? matchTime - 10 * 60 * 1000 : 0;
+          const isWithinTenMinutes = matchTime === 0 || Date.now() >= tenMinCutoff;
+
+          if (!isWithinTenMinutes) {
+            regObj.roomCredentials = {
+              roomId: "",
+              roomPassword: "",
+              revealed: false,
+              revealsAt: tenMinCutoff > 0 ? new Date(tenMinCutoff).toISOString() : null,
+            };
+          } else if (tourneyDoc?.matchRoomCredentials?.roomId) {
+            regObj.roomCredentials = {
+              roomId: tourneyDoc.matchRoomCredentials.roomId,
+              roomPassword: tourneyDoc.matchRoomCredentials.roomPassword,
+              revealed: true,
+            };
+          }
+
           return NextResponse.json({
             success: true,
-            data: reg,
+            data: regObj,
           });
         }
       }
@@ -115,9 +136,23 @@ export async function POST(
     const squadToken = generateSquadToken();
     const maxMembers = format === "solo" ? 1 : format === "duo" ? 2 : 4;
 
-    // Calculate Roster Lock: 10 minutes before match kickoff
-    const matchDate = matchStartTime ? new Date(matchStartTime) : new Date(Date.now() + 2 * 60 * 60 * 1000);
+    // Fetch tournament to align with official kickoff time & room credentials
+    let tourneyDoc: any = null;
+    try {
+      await connectToDatabase();
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        tourneyDoc = await Tournament.findById(id);
+      } else {
+        tourneyDoc = await Tournament.findOne({ slug: id });
+      }
+    } catch {}
+
+    // Calculate Roster Lock: exactly 10 minutes before match kickoff
+    const matchDate = tourneyDoc?.tournamentDate
+      ? new Date(tourneyDoc.tournamentDate)
+      : (matchStartTime ? new Date(matchStartTime) : new Date(Date.now() + 2 * 60 * 60 * 1000));
     const rosterLockedAt = new Date(matchDate.getTime() - 10 * 60 * 1000);
+    const isWithinTenMinutes = Date.now() >= rosterLockedAt.getTime();
 
     // Initial squad roster: Captain is slot 1
     const members: any[] = [
@@ -148,6 +183,16 @@ export async function POST(
       });
     }
 
+    // Only assign room credentials if match is already within 10 minutes and organizer published them
+    const initialCredentials =
+      isWithinTenMinutes && tourneyDoc?.matchRoomCredentials?.roomId
+        ? {
+            roomId: tourneyDoc.matchRoomCredentials.roomId,
+            roomPassword: tourneyDoc.matchRoomCredentials.roomPassword,
+            deliveredAt: new Date(),
+          }
+        : undefined;
+
     const registrationRecord = {
       id: `reg_${Date.now()}`,
       tournamentId: id,
@@ -163,11 +208,8 @@ export async function POST(
       rosterLockedAt: rosterLockedAt.toISOString(),
       paymentStatus: razorpayPaymentId ? "completed" : "free",
       paymentId: razorpayPaymentId || undefined,
-      credentialsDelivered: false,
-      roomCredentials: {
-        roomId: "882910",
-        roomPassword: "play99",
-      },
+      credentialsDelivered: Boolean(initialCredentials),
+      roomCredentials: initialCredentials,
       createdAt: new Date().toISOString(),
     };
 
@@ -202,11 +244,8 @@ export async function POST(
           rosterLockedAt,
           paymentStatus: razorpayPaymentId ? "completed" : "free",
           paymentId: razorpayPaymentId || undefined,
-          credentialsDelivered: false,
-          roomCredentials: {
-            roomId: "882910",
-            roomPassword: "play99",
-          },
+          credentialsDelivered: Boolean(initialCredentials),
+          roomCredentials: initialCredentials,
         });
 
         // Increment registered slots on tournament document

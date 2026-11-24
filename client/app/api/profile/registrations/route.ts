@@ -41,6 +41,11 @@ export async function GET() {
 
     const formatted = registrations.map((reg, idx) => {
       const tour = reg.tournament as unknown as PopulatedTournamentDoc | null;
+      const matchTime = tour?.tournamentDate ? new Date(tour.tournamentDate).getTime() : 0;
+      const tenMinutesBefore = matchTime > 0 ? matchTime - 10 * 60 * 1000 : 0;
+      const isWithinTenMinutes = matchTime === 0 || Date.now() >= tenMinutesBefore;
+      const hasCredentials = Boolean(reg.credentialsDelivered || tour?.matchRoomCredentials?.roomId);
+
       return {
         id: reg._id.toString(),
         tournamentId: tour?._id?.toString() || "",
@@ -50,9 +55,9 @@ export async function GET() {
         teamName: reg.teamName || "My Squad",
         assignedSlot: idx + 1,
         scheduledTime: tour?.tournamentDate || "Upcoming",
-        startsInText: reg.credentialsDelivered ? "LOBBY READY" : "CONFIRMED",
+        startsInText: isWithinTenMinutes && hasCredentials ? "LOBBY READY" : (isWithinTenMinutes ? "STARTING SOON" : "CONFIRMED"),
         isNearest: true,
-        credentialsAvailable: Boolean(reg.credentialsDelivered || tour?.matchRoomCredentials?.roomId),
+        credentialsAvailable: Boolean(isWithinTenMinutes && hasCredentials),
         matchLobbyUrl: `/matches/${tour?._id?.toString() || ""}`,
         tournamentUrl: `/tournaments/${tour?._id?.toString() || ""}`,
         prizePool: tour?.prizePool ? `₹${tour.prizePool.toLocaleString()}` : "₹5,000",
