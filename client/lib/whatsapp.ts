@@ -8,7 +8,8 @@ export interface WhatsAppMessagePayload {
     | "game_invite"
     | "winning_message"
     | "result_verified"
-    | "template_test";
+    | "template_test"
+    | "custom_text";
   templateParams: {
     otp?: string;
     playerName?: string;
@@ -29,6 +30,7 @@ export interface WhatsAppMessagePayload {
     templateName?: string;
     templateLanguage?: string;
     templateBodyParameters?: string[];
+    customText?: string;
   };
 }
 
@@ -129,6 +131,10 @@ export async function sendWhatsAppMessage(
         `⭐ Points Awarded: *${templateParams.totalPoints}*\n\n` +
         `Standings have been officially updated on MVP Arena.`;
       break;
+
+    case "custom_text":
+      messageText = templateParams.customText || "";
+      break;
   }
 
   // 1. If Meta WhatsApp Cloud API credentials exist in environment:
@@ -198,4 +204,17 @@ export async function sendWhatsAppMessage(
   console.log(`======================================================\n`);
 
   return { success: true, messageId: `wa_msg_${Date.now()}` };
+}
+
+export async function sendWhatsAppText(
+  toPhone: string,
+  text: string
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  return sendWhatsAppMessage({
+    toPhone,
+    type: "custom_text",
+    templateParams: {
+      customText: text,
+    },
+  });
 }
