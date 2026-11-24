@@ -118,7 +118,8 @@ export default function TournamentDetailPage() {
     let localStream = "";
     if (typeof window !== "undefined") {
       try {
-        localStream = localStorage.getItem(`mvp_stream_${tournamentId}`) || localStorage.getItem("mvp_stream_active") || "";
+        localStorage.removeItem("mvp_stream_active");
+        localStream = localStorage.getItem(`mvp_stream_${tournamentId}`) || "";
       } catch {}
     }
     const rawDefault = localStream || matchedMock?.youtubeStreamUrl || matchedMock?.streamUrl || "";
@@ -168,8 +169,8 @@ export default function TournamentDetailPage() {
     setSavingStream(true);
     if (typeof window !== "undefined") {
       try {
+        localStorage.removeItem("mvp_stream_active");
         localStorage.setItem(`mvp_stream_${tournamentId}`, finalUrl);
-        localStorage.setItem("mvp_stream_active", finalUrl);
         if (tournament?.slug) {
           localStorage.setItem(`mvp_stream_${tournament.slug}`, finalUrl);
         }
@@ -277,7 +278,8 @@ export default function TournamentDetailPage() {
     let localStream = "";
     if (typeof window !== "undefined") {
       try {
-        localStream = localStorage.getItem(`mvp_stream_${tournamentId}`) || localStorage.getItem("mvp_stream_active") || "";
+        localStorage.removeItem("mvp_stream_active");
+        localStream = localStorage.getItem(`mvp_stream_${tournamentId}`) || "";
       } catch {}
     }
 
@@ -286,7 +288,8 @@ export default function TournamentDetailPage() {
       .then((res) => {
         if (res.success && res.data) {
           const t = res.data;
-          const rawStream = t.youtubeStreamUrl || t.streamUrl || localStream || matchedMock?.youtubeStreamUrl || matchedMock?.streamUrl || "";
+          const tourneySpecificLocal = typeof window !== "undefined" ? (localStorage.getItem(`mvp_stream_${t._id}`) || (t.slug ? localStorage.getItem(`mvp_stream_${t.slug}`) : "") || localStream) : localStream;
+          const rawStream = t.youtubeStreamUrl || t.streamUrl || tourneySpecificLocal || "";
           const streamUrl = normalizeStreamUrl(rawStream);
           setTournament({
             id: t._id || t.id,

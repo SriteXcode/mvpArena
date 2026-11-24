@@ -187,7 +187,7 @@ export default function OrganizerDashboardPage() {
     firstPlacePoints: 15,
     killPoints: 1,
     bannerUrl: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800",
-    youtubeStreamUrl: "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
+    youtubeStreamUrl: "",
     description: "Official competitive tournament with automated standings and instant prize pool.",
     rules: "1. Device Policy: Mobile phones only (iOS / Android). Emulators, triggers, and iPad/tablets are strictly forbidden.\n2. Integrity: Cheating, teaming, hacking, or third-party config files will result in an immediate lifetime ban.\n3. Punctuality: Room credentials are dispatched 15 minutes before kick-off. Matches start on schedule.",
     codeOfConduct: "1. Fair Play: All participants must maintain esports integrity and respect referees and fellow competitors.\n2. Non-Toxic Environment: Abusive language, harassment, hate speech, or toxicity in lobbies will lead to disqualification.\n3. Disqualification & Forfeiture: Failing to verify results, submitting falsified screenshots, or intentional disconnects will forfeit prize entitlements.",
@@ -260,7 +260,7 @@ export default function OrganizerDashboardPage() {
     tournamentId: "",
     roomId: "",
     roomPassword: "",
-    youtubeStreamUrl: "https://www.youtube.com/watch?v=_Fl1DH64V7A&list=RD_Fl1DH64V7A&start_radio=1",
+    youtubeStreamUrl: "",
   });
 
   // Tab 7 Form State: Edit Profile & UPI ID
@@ -389,7 +389,7 @@ export default function OrganizerDashboardPage() {
         }
         if (normalizedCreateStream) {
           try {
-            localStorage.setItem("mvp_stream_active", normalizedCreateStream);
+            localStorage.removeItem("mvp_stream_active");
             if (data.data._id) {
               localStorage.setItem(`mvp_stream_${data.data._id}`, normalizedCreateStream);
             }
@@ -470,10 +470,10 @@ export default function OrganizerDashboardPage() {
 
     if (hasStream) {
       try {
+        localStorage.removeItem("mvp_stream_active");
         if (credentialForm.tournamentId) {
           localStorage.setItem(`mvp_stream_${credentialForm.tournamentId}`, normalizedStream);
         }
-        localStorage.setItem("mvp_stream_active", normalizedStream);
       } catch {}
     }
 

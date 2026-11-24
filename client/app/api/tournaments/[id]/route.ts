@@ -22,8 +22,19 @@ export async function GET(
     }
 
     if (!tournament) {
-      // Fallback to first tournament if id is mock id
-      tournament = await Tournament.findOne().populate("organizer", "orgName logoUrl");
+      tournament = await Tournament.findOne({
+        title: { $regex: new RegExp(`^${id}$`, "i") },
+      }).populate("organizer", "orgName logoUrl");
+    }
+
+    if (!tournament) {
+      tournament = await Tournament.findOne({
+        slug: { $regex: new RegExp(`^${id}`, "i") },
+      }).populate("organizer", "orgName logoUrl");
+    }
+
+    if (!tournament) {
+      return NextResponse.json({ success: false, error: "Tournament not found" }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, data: tournament });
@@ -73,7 +84,21 @@ export async function PATCH(
       updated = await Tournament.findOneAndUpdate({ slug: id }, { $set: updateFields }, { new: true });
     }
     if (!updated) {
-      updated = await Tournament.findOneAndUpdate({}, { $set: updateFields }, { sort: { createdAt: -1 }, new: true });
+      updated = await Tournament.findOneAndUpdate(
+        { title: { $regex: new RegExp(`^${id}$`, "i") } },
+        { $set: updateFields },
+        { new: true }
+      );
+    }
+    if (!updated) {
+      updated = await Tournament.findOneAndUpdate(
+        { slug: { $regex: new RegExp(`^${id}`, "i") } },
+        { $set: updateFields },
+        { new: true }
+      );
+    }
+    if (!updated) {
+      return NextResponse.json({ success: false, error: "Tournament not found" }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, data: updated });

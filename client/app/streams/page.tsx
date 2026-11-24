@@ -211,7 +211,7 @@ export default function StreamsPage() {
                         hour: "2-digit",
                         minute: "2-digit",
                       })
-                    : "Scheduled Today";
+                    : "Upcoming";
 
                   return (
                     <div
@@ -261,10 +261,10 @@ export default function StreamsPage() {
                             Entry: <strong className="text-slate-200">{t.entryFee === 0 ? "FREE" : `₹${t.entryFee}`}</strong>
                           </span>
                           <span>
-                            Slots: <strong className="text-emerald-400">{t.registeredSlots || 0}/{t.maxSlots || 25}</strong>
+                            Slots: <strong className="text-emerald-400">{t.registeredSlots || 0}/{t.maxSlots ? t.maxSlots : "Open"}</strong>
                           </span>
                           <span>
-                            Organizer: <strong className="text-slate-300">{t.organizer?.orgName || "Official Arena Arbiter"}</strong>
+                            Organizer: <strong className="text-slate-300">{t.organizer?.orgName || "Official Organizer"}</strong>
                           </span>
                         </div>
                       </div>

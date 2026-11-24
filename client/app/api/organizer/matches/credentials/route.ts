@@ -56,12 +56,26 @@ export async function POST(request: Request) {
           { new: true }
         );
       }
+      if (!tournament) {
+        tournament = await Tournament.findOneAndUpdate(
+          { title: { $regex: new RegExp(`^${tournamentId}$`, "i") } },
+          { $set: tourneyUpdate },
+          { new: true }
+        );
+      }
+      if (!tournament) {
+        tournament = await Tournament.findOneAndUpdate(
+          { slug: { $regex: new RegExp(`^${tournamentId}`, "i") } },
+          { $set: tourneyUpdate },
+          { new: true }
+        );
+      }
     }
+
     if (!tournament) {
-      tournament = await Tournament.findOneAndUpdate(
-        {},
-        { $set: tourneyUpdate },
-        { sort: { createdAt: -1 }, new: true }
+      return NextResponse.json(
+        { success: false, error: "Tournament not found" },
+        { status: 404 }
       );
     }
 

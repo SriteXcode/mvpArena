@@ -318,7 +318,7 @@ export default function HomePage() {
       <HeroBanner onOpenShareModal={() => setShowShareModal(true)} />
 
       {/* Featured Tournaments Section with Multi-Filter Suite */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full">
+      <section id="tournaments" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full scroll-mt-20">
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-5">
           <div className="flex items-center justify-between w-full md:w-auto">
