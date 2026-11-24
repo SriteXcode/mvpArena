@@ -5,7 +5,7 @@ import OtpVerification from "@/models/OtpVerification";
 import { formatWhatsAppPhone, sendWhatsAppText } from "@/lib/whatsapp";
 
 // ==============================================================================
-// GET /api/whatsapp/webhook
+// GET /api/whatsapp/webhook 
 // Meta WhatsApp Cloud API Webhook Handshake & Verification
 // ==============================================================================
 export async function GET(req: NextRequest) {
